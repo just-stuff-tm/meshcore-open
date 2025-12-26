@@ -1,0 +1,158 @@
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/foundation.dart';
+
+class NotificationService {
+  static final NotificationService _instance = NotificationService._internal();
+  factory NotificationService() => _instance;
+  NotificationService._internal();
+
+  final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+  bool _isInitialized = false;
+
+  Future<void> initialize() async {
+    if (_isInitialized) return;
+
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
+
+    try {
+      await _notifications.initialize(
+        initSettings,
+        onDidReceiveNotificationResponse: _onNotificationTapped,
+      );
+      _isInitialized = true;
+    } catch (e) {
+      debugPrint('Error initializing notifications: $e');
+    }
+  }
+
+  Future<bool> requestPermissions() async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    // Request Android 13+ notification permission
+    final androidPlugin = _notifications.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (androidPlugin != null) {
+      final granted = await androidPlugin.requestNotificationsPermission();
+      return granted ?? false;
+    }
+
+    // iOS permissions are requested during initialization
+    final iosPlugin = _notifications.resolvePlatformSpecificImplementation<
+        IOSFlutterLocalNotificationsPlugin>();
+    if (iosPlugin != null) {
+      final granted = await iosPlugin.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      return granted ?? false;
+    }
+
+    return true;
+  }
+
+  Future<void> showMessageNotification({
+    required String contactName,
+    required String message,
+    String? contactId,
+  }) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    const androidDetails = AndroidNotificationDetails(
+      'messages',
+      'Messages',
+      channelDescription: 'New message notifications',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notifications.show(
+      contactId?.hashCode ?? 0,
+      'New message from $contactName',
+      message.length > 100 ? '${message.substring(0, 100)}...' : message,
+      notificationDetails,
+      payload: 'message:$contactId',
+    );
+  }
+
+  Future<void> showAdvertNotification({
+    required String contactName,
+    required String contactType,
+    String? contactId,
+  }) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    const androidDetails = AndroidNotificationDetails(
+      'adverts',
+      'Advertisements',
+      channelDescription: 'New node advertisement notifications',
+      importance: Importance.defaultImportance,
+      priority: Priority.defaultPriority,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notifications.show(
+      contactId?.hashCode ?? DateTime.now().millisecondsSinceEpoch,
+      'New $contactType discovered',
+      contactName,
+      notificationDetails,
+      payload: 'advert:$contactId',
+    );
+  }
+
+  void _onNotificationTapped(NotificationResponse response) {
+    final payload = response.payload;
+    if (payload != null) {
+      debugPrint('Notification tapped: $payload');
+      // Handle navigation based on payload
+      // This can be extended to navigate to specific screens
+    }
+  }
+
+  Future<void> cancelAll() async {
+    await _notifications.cancelAll();
+  }
+
+  Future<void> cancel(int id) async {
+    await _notifications.cancel(id);
+  }
+}

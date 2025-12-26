@@ -1,0 +1,1595 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart' as crypto;
+import 'package:pointycastle/export.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+
+import '../models/channel.dart';
+import '../models/channel_message.dart';
+import '../models/contact.dart';
+import '../models/message.dart';
+import '../models/path_selection.dart';
+import '../helpers/smaz.dart';
+import '../services/ble_debug_log_service.dart';
+import '../services/message_retry_service.dart';
+import '../services/path_history_service.dart';
+import '../services/app_settings_service.dart';
+import '../services/notification_service.dart';
+import '../storage/channel_message_store.dart';
+import '../storage/channel_order_store.dart';
+import '../storage/channel_settings_store.dart';
+import '../storage/contact_store.dart';
+import '../storage/message_store.dart';
+import 'meshcore_protocol.dart';
+
+class MeshCoreUuids {
+  static const String service = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+  static const String rxCharacteristic = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+  static const String txCharacteristic = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+}
+
+enum MeshCoreConnectionState {
+  disconnected,
+  scanning,
+  connecting,
+  connected,
+  disconnecting,
+}
+
+class MeshCoreConnector extends ChangeNotifier {
+  MeshCoreConnectionState _state = MeshCoreConnectionState.disconnected;
+  BluetoothDevice? _device;
+  BluetoothCharacteristic? _rxCharacteristic;
+  BluetoothCharacteristic? _txCharacteristic;
+
+  final List<ScanResult> _scanResults = [];
+  final List<Contact> _contacts = [];
+  final List<Channel> _channels = [];
+  final Map<String, List<Message>> _conversations = {};
+  final Map<int, List<ChannelMessage>> _channelMessages = {};
+  final Set<String> _loadedConversationKeys = {};
+
+  StreamSubscription<List<ScanResult>>? _scanSubscription;
+  StreamSubscription<BluetoothConnectionState>? _connectionSubscription;
+  StreamSubscription<List<int>>? _notifySubscription;
+  Timer? _selfInfoRetryTimer;
+
+  final StreamController<Uint8List> _receivedFramesController =
+      StreamController<Uint8List>.broadcast();
+
+  Uint8List? _selfPublicKey;
+  String? _selfName;
+  int? _currentTxPower;
+  int? _maxTxPower;
+  int? _currentFreqHz;
+  int? _currentBwHz;
+  int? _currentSf;
+  int? _currentCr;
+  int? _batteryMillivolts;
+  double? _selfLatitude;
+  double? _selfLongitude;
+  bool _isLoadingContacts = false;
+  bool _isLoadingChannels = false;
+  bool _batteryRequested = false;
+  bool _awaitingSelfInfo = false;
+  bool _preserveContactsOnRefresh = false;
+  static const int _defaultMaxContacts = 32;
+  static const int _defaultMaxChannels = 8;
+  int _maxContacts = _defaultMaxContacts;
+  int _maxChannels = _defaultMaxChannels;
+  bool _isSyncingQueuedMessages = false;
+  bool _queuedMessageSyncInFlight = false;
+  bool _didInitialQueueSync = false;
+  bool _pendingQueueSync = false;
+
+  // Services
+  MessageRetryService? _retryService;
+  PathHistoryService? _pathHistoryService;
+  AppSettingsService? _appSettingsService;
+  final NotificationService _notificationService = NotificationService();
+  BleDebugLogService? _bleDebugLogService;
+  final ChannelMessageStore _channelMessageStore = ChannelMessageStore();
+  final MessageStore _messageStore = MessageStore();
+  final ChannelOrderStore _channelOrderStore = ChannelOrderStore();
+  final ChannelSettingsStore _channelSettingsStore = ChannelSettingsStore();
+  final ContactStore _contactStore = ContactStore();
+  final Map<int, bool> _channelSmazEnabled = {};
+  final Set<String> _knownContactKeys = {};
+  List<int> _channelOrder = [];
+
+  // Getters
+  MeshCoreConnectionState get state => _state;
+  BluetoothDevice? get device => _device;
+  List<ScanResult> get scanResults => List.unmodifiable(_scanResults);
+  List<Contact> get contacts => List.unmodifiable(_contacts);
+  List<Channel> get channels => List.unmodifiable(_channels);
+  bool get isConnected => _state == MeshCoreConnectionState.connected;
+  bool get isLoadingContacts => _isLoadingContacts;
+  bool get isLoadingChannels => _isLoadingChannels;
+  Stream<Uint8List> get receivedFrames => _receivedFramesController.stream;
+  Uint8List? get selfPublicKey => _selfPublicKey;
+  String? get selfName => _selfName;
+  double? get selfLatitude => _selfLatitude;
+  double? get selfLongitude => _selfLongitude;
+  int? get currentTxPower => _currentTxPower;
+  int? get maxTxPower => _maxTxPower;
+  int? get currentFreqHz => _currentFreqHz;
+  int? get currentBwHz => _currentBwHz;
+  int? get currentSf => _currentSf;
+  int? get currentCr => _currentCr;
+  int? get batteryMillivolts => _batteryMillivolts;
+  int get maxContacts => _maxContacts;
+  int get maxChannels => _maxChannels;
+  bool get isSyncingQueuedMessages => _isSyncingQueuedMessages;
+  int? get batteryPercent => _batteryMillivolts == null
+      ? null
+      : _estimateBatteryPercent(
+          _batteryMillivolts!,
+          _batteryChemistryForDevice(),
+        );
+
+  String _batteryChemistryForDevice() {
+    final deviceId = _device?.remoteId.toString();
+    if (deviceId == null || _appSettingsService == null) return 'nmc';
+    return _appSettingsService!.batteryChemistryForDevice(deviceId);
+  }
+
+  int _estimateBatteryPercent(int millivolts, String chemistry) {
+    final range = _batteryVoltageRange(chemistry);
+    final minMv = range.$1;
+    final maxMv = range.$2;
+    if (millivolts <= minMv) return 0;
+    if (millivolts >= maxMv) return 100;
+    return (((millivolts - minMv) * 100) / (maxMv - minMv)).round();
+  }
+
+  (int, int) _batteryVoltageRange(String chemistry) {
+    switch (chemistry) {
+      case 'lifepo4':
+        return (2600, 3650);
+      case 'lipo':
+        return (3000, 4200);
+      case 'nmc':
+      default:
+        return (3000, 4200);
+    }
+  }
+
+  List<Message> getMessages(Contact contact) {
+    return _conversations[contact.publicKeyHex] ?? [];
+  }
+
+  Future<void> _loadMessagesForContact(String contactKeyHex) async {
+    if (_loadedConversationKeys.contains(contactKeyHex)) return;
+    _loadedConversationKeys.add(contactKeyHex);
+
+    final messages = await _messageStore.loadMessages(contactKeyHex);
+    if (messages.isNotEmpty) {
+      _conversations[contactKeyHex] = messages;
+      notifyListeners();
+    }
+  }
+
+  List<ChannelMessage> getChannelMessages(Channel channel) {
+    return _channelMessages[channel.index] ?? [];
+  }
+
+  bool isChannelSmazEnabled(int channelIndex) {
+    return _channelSmazEnabled[channelIndex] ?? false;
+  }
+
+  Future<void> setChannelSmazEnabled(int channelIndex, bool enabled) async {
+    _channelSmazEnabled[channelIndex] = enabled;
+    await _channelSettingsStore.saveSmazEnabled(channelIndex, enabled);
+    notifyListeners();
+  }
+
+  Future<void> _loadChannelOrder() async {
+    _channelOrder = await _channelOrderStore.loadChannelOrder();
+    _applyChannelOrder();
+    notifyListeners();
+  }
+
+  /// Load persisted channel messages for a specific channel
+  Future<void> _loadChannelMessages(int channelIndex) async {
+    final messages = await _channelMessageStore.loadChannelMessages(channelIndex);
+    if (messages.isNotEmpty) {
+      _channelMessages[channelIndex] = messages;
+      notifyListeners();
+    }
+  }
+
+  /// Load all persisted channel messages on startup
+  Future<void> loadAllChannelMessages({int? maxChannels}) async {
+    final channelCount = maxChannels ?? _maxChannels;
+    // Load messages for all known channels (0-7 by default)
+    for (int i = 0; i < channelCount; i++) {
+      await _loadChannelMessages(i);
+    }
+  }
+
+  void initialize({
+    required MessageRetryService retryService,
+    required PathHistoryService pathHistoryService,
+    AppSettingsService? appSettingsService,
+    BleDebugLogService? bleDebugLogService,
+  }) {
+    _retryService = retryService;
+    _pathHistoryService = pathHistoryService;
+    _appSettingsService = appSettingsService;
+    _bleDebugLogService = bleDebugLogService;
+
+    // Initialize notification service
+    _notificationService.initialize();
+    _loadChannelOrder();
+
+    // Initialize retry service callbacks
+    _retryService?.initialize(
+      sendMessageCallback: _sendMessageDirect,
+      addMessageCallback: _addMessage,
+      updateMessageCallback: _updateMessage,
+      clearContactPathCallback: clearContactPath,
+      calculateTimeoutCallback: (pathLength, messageBytes) =>
+          calculateTimeout(pathLength: pathLength, messageBytes: messageBytes),
+      appSettingsService: appSettingsService,
+      recordPathResultCallback: _recordPathResult,
+    );
+  }
+
+  Future<void> loadContactCache() async {
+    final cached = await _contactStore.loadContacts();
+    _knownContactKeys
+      ..clear()
+      ..addAll(cached.map((c) => c.publicKeyHex));
+  }
+
+  Future<void> loadChannelSettings({int? maxChannels}) async {
+    _channelSmazEnabled.clear();
+    final channelCount = maxChannels ?? _maxChannels;
+    for (int i = 0; i < channelCount; i++) {
+      _channelSmazEnabled[i] = await _channelSettingsStore.loadSmazEnabled(i);
+    }
+  }
+
+  void _sendMessageDirect(
+    Contact contact,
+    String text,
+    bool forceFlood,
+    int attempt,
+    int timestampSeconds,
+  ) async {
+    if (!isConnected || text.isEmpty) return;
+    await sendFrame(
+      buildSendTextMsgFrame(
+        contact.publicKey,
+        text,
+        forceFlood: forceFlood,
+        attempt: attempt,
+        timestampSeconds: timestampSeconds,
+      ),
+    );
+  }
+
+  void _updateMessage(Message message) {
+    final contactKey = pubKeyToHex(message.senderKey);
+    final messages = _conversations[contactKey];
+    if (messages != null) {
+      final index = messages.indexWhere((m) => m.messageId == message.messageId);
+      if (index != -1) {
+        messages[index] = message;
+        _messageStore.saveMessages(contactKey, messages);
+        notifyListeners();
+      }
+    }
+  }
+
+  void _recordPathResult(
+    String contactPubKeyHex,
+    PathSelection selection,
+    bool success,
+    int? tripTimeMs,
+  ) {
+    if (_pathHistoryService == null) return;
+    _pathHistoryService!.recordPathResult(
+      contactPubKeyHex,
+      selection,
+      success: success,
+      tripTimeMs: tripTimeMs,
+    );
+  }
+
+  Contact _applyAutoSelection(Contact contact, PathSelection? selection) {
+    if (selection == null || selection.useFlood || selection.pathBytes.isEmpty) {
+      return contact;
+    }
+
+    return Contact(
+      publicKey: contact.publicKey,
+      name: contact.name,
+      type: contact.type,
+      pathLength: selection.hopCount >= 0 ? selection.hopCount : contact.pathLength,
+      path: Uint8List.fromList(selection.pathBytes),
+      latitude: contact.latitude,
+      longitude: contact.longitude,
+      lastSeen: contact.lastSeen,
+    );
+  }
+
+  Future<void> startScan({Duration timeout = const Duration(seconds: 10)}) async {
+    if (_state == MeshCoreConnectionState.scanning) return;
+
+    _scanResults.clear();
+    _setState(MeshCoreConnectionState.scanning);
+
+    _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
+      _scanResults.clear();
+      for (var result in results) {
+        if (result.device.platformName.startsWith("MeshCore-") ||
+            result.advertisementData.advName.startsWith("MeshCore-")) {
+          _scanResults.add(result);
+        }
+      }
+      notifyListeners();
+    });
+
+    await FlutterBluePlus.startScan(
+      timeout: timeout,
+      androidScanMode: AndroidScanMode.lowLatency,
+    );
+
+    await Future.delayed(timeout);
+    await stopScan();
+  }
+
+  Future<void> stopScan() async {
+    await FlutterBluePlus.stopScan();
+    await _scanSubscription?.cancel();
+    _scanSubscription = null;
+
+    if (_state == MeshCoreConnectionState.scanning) {
+      _setState(MeshCoreConnectionState.disconnected);
+    }
+  }
+
+  Future<void> connect(BluetoothDevice device) async {
+    if (_state == MeshCoreConnectionState.connecting ||
+        _state == MeshCoreConnectionState.connected) {
+      return;
+    }
+
+    await stopScan();
+    _setState(MeshCoreConnectionState.connecting);
+    _device = device;
+
+    try {
+      _connectionSubscription = device.connectionState.listen((state) {
+        if (state == BluetoothConnectionState.disconnected) {
+          _handleDisconnection();
+        }
+      });
+
+      await device.connect(
+        timeout: const Duration(seconds: 15),
+        mtu: null,
+        license: License.free,
+      );
+
+      // Request larger MTU for sending larger frames
+      try {
+        final mtu = await device.requestMtu(185);
+        debugPrint('MTU set to: $mtu');
+      } catch (e) {
+        debugPrint('MTU request failed: $e, using default');
+      }
+
+      List<BluetoothService> services = await device.discoverServices();
+
+      BluetoothService? uartService;
+      for (var service in services) {
+        if (service.uuid.toString().toLowerCase() == MeshCoreUuids.service) {
+          uartService = service;
+          break;
+        }
+      }
+
+      if (uartService == null) {
+        throw Exception("MeshCore UART service not found");
+      }
+
+      for (var characteristic in uartService.characteristics) {
+        String uuid = characteristic.uuid.toString().toLowerCase();
+        if (uuid == MeshCoreUuids.rxCharacteristic) {
+          _rxCharacteristic = characteristic;
+        } else if (uuid == MeshCoreUuids.txCharacteristic) {
+          _txCharacteristic = characteristic;
+        }
+      }
+
+      if (_rxCharacteristic == null || _txCharacteristic == null) {
+        throw Exception("MeshCore characteristics not found");
+      }
+
+      await _txCharacteristic!.setNotifyValue(true);
+      _notifySubscription = _txCharacteristic!.onValueReceived.listen(_handleFrame);
+
+      _setState(MeshCoreConnectionState.connected);
+
+      await _requestDeviceInfo();
+
+      // Keep device clock aligned on every connection.
+      await syncTime();
+    } catch (e) {
+      debugPrint("Connection error: $e");
+      await disconnect();
+      rethrow;
+    }
+  }
+
+  Future<void> disconnect() async {
+    if (_state == MeshCoreConnectionState.disconnecting) return;
+
+    _setState(MeshCoreConnectionState.disconnecting);
+
+    await _notifySubscription?.cancel();
+    _notifySubscription = null;
+
+    await _connectionSubscription?.cancel();
+    _connectionSubscription = null;
+    _selfInfoRetryTimer?.cancel();
+    _selfInfoRetryTimer = null;
+
+    try {
+      await _device?.disconnect();
+    } catch (e) {
+      debugPrint("Disconnect error: $e");
+    }
+
+    _device = null;
+    _rxCharacteristic = null;
+    _txCharacteristic = null;
+    _contacts.clear();
+    _conversations.clear();
+    _loadedConversationKeys.clear();
+    _selfPublicKey = null;
+    _selfName = null;
+    _selfLatitude = null;
+    _selfLongitude = null;
+    _batteryMillivolts = null;
+    _batteryRequested = false;
+    _awaitingSelfInfo = false;
+    _maxContacts = _defaultMaxContacts;
+    _maxChannels = _defaultMaxChannels;
+    _isSyncingQueuedMessages = false;
+    _queuedMessageSyncInFlight = false;
+    _didInitialQueueSync = false;
+    _pendingQueueSync = false;
+    _pendingQueueSync = false;
+    _didInitialQueueSync = false;
+
+    _setState(MeshCoreConnectionState.disconnected);
+  }
+
+  Future<void> sendFrame(Uint8List data) async {
+    if (!isConnected || _rxCharacteristic == null) {
+      throw Exception("Not connected to a MeshCore device");
+    }
+
+    _bleDebugLogService?.logFrame(data, outgoing: true);
+
+    // Prefer write without response when supported; fall back to write with response.
+    final properties = _rxCharacteristic!.properties;
+    final canWriteWithoutResponse = properties.writeWithoutResponse;
+    final canWriteWithResponse = properties.write;
+    if (!canWriteWithoutResponse && !canWriteWithResponse) {
+      throw Exception("MeshCore RX characteristic does not support write");
+    }
+
+    await _rxCharacteristic!.write(
+      data.toList(),
+      withoutResponse: canWriteWithoutResponse,
+    );
+  }
+
+  Future<void> requestBatteryStatus({bool force = false}) async {
+    if (!isConnected) return;
+    if (_batteryRequested && !force) return;
+    _batteryRequested = true;
+    await sendFrame(buildGetBattAndStorageFrame());
+  }
+
+  Future<void> refreshDeviceInfo() async {
+    if (!isConnected) return;
+    _awaitingSelfInfo = true;
+    await sendFrame(buildDeviceQueryFrame());
+    await sendFrame(buildAppStartFrame());
+    await requestBatteryStatus(force: true);
+    await sendFrame(buildGetRadioSettingsFrame());
+  }
+
+  Future<void> _requestDeviceInfo() async {
+    _awaitingSelfInfo = true;
+    await sendFrame(buildDeviceQueryFrame());
+    await sendFrame(buildAppStartFrame());
+    await requestBatteryStatus();
+
+    _selfInfoRetryTimer?.cancel();
+    _selfInfoRetryTimer = Timer(const Duration(milliseconds: 3500), () {
+      if (!isConnected || !_awaitingSelfInfo) return;
+      sendFrame(buildAppStartFrame());
+    });
+  }
+
+  Future<void> getContacts({int? since, bool preserveExisting = false}) async {
+    if (!isConnected) return;
+
+    _isLoadingContacts = true;
+    _preserveContactsOnRefresh = preserveExisting;
+    if (!preserveExisting) {
+      _contacts.clear();
+      notifyListeners();
+    }
+
+    await sendFrame(buildGetContactsFrame(since: since));
+  }
+
+  Future<void> refreshContacts() async {
+    await getContacts(preserveExisting: true);
+  }
+
+  Future<void> refreshContactsSinceLastmod() async {
+    await getContacts(
+      since: _latestContactLastmod(),
+      preserveExisting: true,
+    );
+  }
+
+  Future<void> sendMessage(
+    Contact contact,
+    String text, {
+    bool forceFlood = false,
+    Uint8List? customPath,
+    int? customPathLen,
+  }) async {
+    if (!isConnected || text.isEmpty) return;
+
+    // If custom path is provided, temporarily update the contact's path
+    if (customPath != null && customPathLen != null && customPathLen >= 0) {
+      await setContactPath(contact, customPath, customPathLen);
+      // Small delay to ensure the path update is processed
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+
+    PathSelection? autoSelection;
+    if (customPath == null &&
+        _appSettingsService?.settings.autoRouteRotationEnabled == true &&
+        !forceFlood) {
+      autoSelection = _pathHistoryService?.getNextAutoPathSelection(contact.publicKeyHex);
+      if (autoSelection != null) {
+        _pathHistoryService?.recordPathAttempt(contact.publicKeyHex, autoSelection);
+        if (!autoSelection.useFlood && autoSelection.pathBytes.isNotEmpty) {
+          await setContactPath(
+            contact,
+            Uint8List.fromList(autoSelection.pathBytes),
+            autoSelection.pathBytes.length,
+          );
+          await Future.delayed(const Duration(milliseconds: 50));
+        }
+      }
+    }
+
+    if (_retryService != null) {
+      final pathBytes =
+          _resolveOutgoingPathBytes(contact, customPath, customPathLen, forceFlood, autoSelection);
+      final pathLength =
+          _resolveOutgoingPathLength(contact, customPathLen, forceFlood, autoSelection);
+      final selectedContact = _applyAutoSelection(contact, autoSelection);
+      await _retryService!.sendMessageWithRetry(
+        contact: selectedContact,
+        text: text,
+        forceFlood: forceFlood,
+        pathSelection: autoSelection,
+        pathBytes: pathBytes,
+        pathLength: pathLength,
+      );
+    } else {
+      // Fallback to old behavior if retry service not initialized
+      final pathBytes = _resolveOutgoingPathBytes(contact, customPath, customPathLen, forceFlood, autoSelection);
+      final pathLength = _resolveOutgoingPathLength(contact, customPathLen, forceFlood, autoSelection);
+      final message = Message.outgoing(
+        contact.publicKey,
+        text,
+        pathLength: pathLength,
+        pathBytes: pathBytes,
+      );
+      _addMessage(contact.publicKeyHex, message);
+      notifyListeners();
+      await sendFrame(buildSendTextMsgFrame(contact.publicKey, text, forceFlood: forceFlood));
+    }
+  }
+
+  Future<void> setContactPath(Contact contact, Uint8List customPath, int pathLen) async {
+    if (!isConnected) return;
+
+    await sendFrame(buildUpdateContactPathFrame(
+      contact.publicKey,
+      customPath,
+      pathLen,
+      type: contact.type,
+      name: contact.name,
+    ));
+  }
+
+  Future<void> sendChannelMessage(Channel channel, String text) async {
+    if (!isConnected || text.isEmpty) return;
+
+    final message = ChannelMessage.outgoing(text, _selfName ?? 'Me', channel.index);
+    _addChannelMessage(channel.index, message);
+    notifyListeners();
+
+    final trimmed = text.trim();
+    final isStructuredPayload = trimmed.startsWith('g:') || trimmed.startsWith('m:');
+    final outboundText = (isChannelSmazEnabled(channel.index) && !isStructuredPayload)
+        ? Smaz.encodeIfSmaller(text)
+        : text;
+    await sendFrame(buildSendChannelTextMsgFrame(channel.index, outboundText));
+  }
+
+  Future<void> removeContact(Contact contact) async {
+    if (!isConnected) return;
+
+    await sendFrame(buildRemoveContactFrame(contact.publicKey));
+    _contacts.removeWhere((c) => c.publicKeyHex == contact.publicKeyHex);
+    _knownContactKeys.remove(contact.publicKeyHex);
+    unawaited(_persistContacts());
+    _conversations.remove(contact.publicKeyHex);
+    _loadedConversationKeys.remove(contact.publicKeyHex);
+    _messageStore.clearMessages(contact.publicKeyHex);
+    notifyListeners();
+  }
+
+  Future<void> clearContactPath(Contact contact) async {
+    if (!isConnected) return;
+
+    await sendFrame(buildResetPathFrame(contact.publicKey));
+    final existingIndex =
+        _contacts.indexWhere((c) => c.publicKeyHex == contact.publicKeyHex);
+    if (existingIndex >= 0) {
+      final existing = _contacts[existingIndex];
+      _contacts[existingIndex] = Contact(
+        publicKey: existing.publicKey,
+        name: existing.name,
+        type: existing.type,
+        pathLength: -1,
+        path: Uint8List(0),
+        latitude: existing.latitude,
+        longitude: existing.longitude,
+        lastSeen: existing.lastSeen,
+      );
+      notifyListeners();
+      unawaited(_persistContacts());
+    }
+    // The device will send updated contact info with path_len = -1
+  }
+
+  Future<void> syncTime() async {
+    if (!isConnected) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    await sendFrame(buildSetDeviceTimeFrame(now));
+  }
+
+  Future<void> syncQueuedMessages({bool force = false}) async {
+    if (!isConnected) return;
+    if (!force && _isSyncingQueuedMessages) return;
+    if (_awaitingSelfInfo || _isLoadingContacts) {
+      _pendingQueueSync = true;
+      return;
+    }
+    _isSyncingQueuedMessages = true;
+    await _requestNextQueuedMessage();
+  }
+
+  Future<void> _requestNextQueuedMessage() async {
+    if (!isConnected) {
+      _isSyncingQueuedMessages = false;
+      _queuedMessageSyncInFlight = false;
+      return;
+    }
+    if (_queuedMessageSyncInFlight) return;
+    _queuedMessageSyncInFlight = true;
+    try {
+      await sendFrame(buildSyncNextMessageFrame());
+    } catch (e) {
+      _queuedMessageSyncInFlight = false;
+      _isSyncingQueuedMessages = false;
+    }
+  }
+
+  Future<void> sendCliCommand(String command) async {
+    if (!isConnected) return;
+
+    // CLI commands are sent as UTF-8 text with a special prefix
+    final commandBytes = utf8.encode(command);
+    final bytes = Uint8List.fromList([0x01, ...commandBytes, 0x00]);
+    await sendFrame(bytes);
+  }
+
+  Future<void> getChannels({int? maxChannels}) async {
+    if (!isConnected) return;
+
+    _isLoadingChannels = true;
+    _channels.clear();
+    notifyListeners();
+
+    // Request each channel index
+    final channelCount = maxChannels ?? _maxChannels;
+    for (int i = 0; i < channelCount; i++) {
+      await sendFrame(buildGetChannelFrame(i));
+    }
+
+    _isLoadingChannels = false;
+    notifyListeners();
+  }
+
+  Future<void> setChannel(int index, String name, Uint8List psk) async {
+    if (!isConnected) return;
+
+    await sendFrame(buildSetChannelFrame(index, name, psk));
+    // Refresh channels after setting
+    await getChannels();
+  }
+
+  Future<void> deleteChannel(int index) async {
+    if (!isConnected) return;
+
+    // Delete by setting empty name and zero PSK
+    await sendFrame(buildSetChannelFrame(index, '', Uint8List(16)));
+    // Refresh channels after deleting
+    await getChannels();
+  }
+
+  void _handleFrame(List<int> data) {
+    if (data.isEmpty) return;
+
+    final frame = Uint8List.fromList(data);
+    _receivedFramesController.add(frame);
+    _bleDebugLogService?.logFrame(frame, outgoing: false);
+
+    final code = frame[0];
+    debugPrint('RX frame: code=$code len=${frame.length}');
+
+    switch (code) {
+      case respCodeDeviceInfo:
+        _handleDeviceInfo(frame);
+        break;
+      case respCodeSelfInfo:
+        debugPrint('Got SELF_INFO');
+        _handleSelfInfo(frame);
+        break;
+      case respCodeContactsStart:
+        debugPrint('Got CONTACTS_START');
+        if (!_preserveContactsOnRefresh) {
+          _contacts.clear();
+        }
+        _isLoadingContacts = true;
+        notifyListeners();
+        break;
+      case respCodeContact:
+        debugPrint('Got CONTACT');
+        _handleContact(frame);
+        break;
+      case respCodeEndOfContacts:
+        debugPrint('Got END_OF_CONTACTS');
+        _isLoadingContacts = false;
+        _preserveContactsOnRefresh = false;
+        notifyListeners();
+        unawaited(_persistContacts());
+        if (!_didInitialQueueSync || _pendingQueueSync) {
+          _didInitialQueueSync = true;
+          _pendingQueueSync = false;
+          unawaited(syncQueuedMessages(force: true));
+        }
+        break;
+      case respCodeContactMsgRecv:
+      case respCodeContactMsgRecvV3:
+        _handleIncomingMessage(frame);
+        break;
+      case respCodeChannelMsgRecv:
+      case respCodeChannelMsgRecvV3:
+        _handleIncomingChannelMessage(frame);
+        break;
+      case respCodeSent:
+        _handleMessageSent(frame);
+        break;
+      case respCodeNoMoreMessages:
+        _handleNoMoreMessages();
+        break;
+      case pushCodeMsgWaiting:
+        unawaited(syncQueuedMessages(force: true));
+        break;
+      case pushCodeSendConfirmed:
+        _handleSendConfirmed(frame);
+        break;
+      case pushCodePathUpdated:
+        _handlePathUpdated(frame);
+        break;
+      case pushCodeLoginSuccess:
+      case pushCodeLoginFail:
+      case pushCodeStatusResponse:
+        break;
+      case pushCodeLogRxData:
+        _handleLogRxData(frame);
+        break;
+      case respCodeChannelInfo:
+        _handleChannelInfo(frame);
+        break;
+      case respCodeRadioSettings:
+        _handleRadioSettings(frame);
+        break;
+      case respCodeBattAndStorage:
+        _handleBatteryAndStorage(frame);
+        break;
+      default:
+        debugPrint('Unknown frame code: $code');
+    }
+  }
+
+  void _handlePathUpdated(Uint8List frame) {
+    // Frame format: [0]=code, [1-32]=pub_key
+    if (frame.length >= 33 && _pathHistoryService != null) {
+      final pubKey = Uint8List.fromList(frame.sublist(1, 33));
+      final contact = _contacts.cast<Contact?>().firstWhere(
+        (c) => c != null && listEquals(c.publicKey, pubKey),
+        orElse: () => null,
+      );
+
+      if (contact != null) {
+        _pathHistoryService!.handlePathUpdated(contact);
+        refreshContactsSinceLastmod();
+      }
+    }
+  }
+
+  void _handleSelfInfo(Uint8List frame) {
+    // SELF_INFO format:
+    // [0] = RESP_CODE_SELF_INFO
+    // [1] = ADV_TYPE
+    // [2] = tx_power_dbm
+    // [3] = MAX_LORA_TX_POWER
+    // [4-35] = pub_key (32 bytes)
+    // [36-39] = lat (int32 LE)
+    // [40-43] = lon (int32 LE)
+    // [44] = multi_acks
+    // [45] = advert_loc_policy
+    // [46] = telemetry modes
+    // [47] = manual_add_contacts
+    // [48-51] = freq (uint32 LE, in Hz)
+    // [52-55] = bw (uint32 LE, in Hz)
+    // [56] = sf
+    // [57] = cr
+    // [58+] = node_name
+    if (frame.length < 4 + pubKeySize) return;
+
+    _currentTxPower = frame[2];
+    _maxTxPower = frame[3];
+    _selfPublicKey = Uint8List.fromList(frame.sublist(4, 4 + pubKeySize));
+    _selfLatitude = readInt32LE(frame, 36) / 1000000.0;
+    _selfLongitude = readInt32LE(frame, 40) / 1000000.0;
+
+    // Radio settings (if frame is long enough)
+    if (frame.length >= 58) {
+      _currentFreqHz = readUint32LE(frame, 48);
+      _currentBwHz = readUint32LE(frame, 52);
+      _currentSf = frame[56];
+      _currentCr = frame[57];
+    }
+
+    // Node name starts at offset 58 if frame is long enough
+    if (frame.length > 58) {
+      _selfName = readCString(frame, 58, frame.length - 58);
+    }
+    _awaitingSelfInfo = false;
+    notifyListeners();
+
+    // Auto-fetch contacts after getting self info
+    getContacts();
+  }
+
+  void _handleDeviceInfo(Uint8List frame) {
+    if (frame.length < 4) return;
+    // Firmware reports MAX_CONTACTS / 2 for v3+ device info.
+    final reportedContacts = frame[2];
+    final reportedChannels = frame[3];
+    final nextMaxContacts = reportedContacts > 0 ? reportedContacts * 2 : _maxContacts;
+    final nextMaxChannels = reportedChannels > 0 ? reportedChannels : _maxChannels;
+    final previousMaxChannels = _maxChannels;
+    if (nextMaxContacts != _maxContacts || nextMaxChannels != _maxChannels) {
+      _maxContacts = nextMaxContacts;
+      _maxChannels = nextMaxChannels;
+      if (nextMaxChannels > previousMaxChannels) {
+        unawaited(loadChannelSettings(maxChannels: nextMaxChannels));
+        unawaited(loadAllChannelMessages(maxChannels: nextMaxChannels));
+        if (isConnected) {
+          unawaited(getChannels(maxChannels: nextMaxChannels));
+        }
+      }
+      notifyListeners();
+    }
+  }
+
+  void _handleNoMoreMessages() {
+    _isSyncingQueuedMessages = false;
+    _queuedMessageSyncInFlight = false;
+  }
+
+  void _handleQueuedMessageReceived() {
+    if (!_isSyncingQueuedMessages) return;
+    _queuedMessageSyncInFlight = false;
+    unawaited(_requestNextQueuedMessage());
+  }
+
+  void _handleRadioSettings(Uint8List frame) {
+    // Frame format from C++:
+    // [0] = RESP_CODE_RADIO_SETTINGS
+    // [1-4] = freq (uint32 LE, in Hz)
+    // [5-8] = bw (uint32 LE, in Hz)
+    // [9] = sf
+    // [10] = cr
+    if (frame.length >= 11) {
+      _currentFreqHz = readUint32LE(frame, 1);
+      _currentBwHz = readUint32LE(frame, 5);
+      _currentSf = frame[9];
+      _currentCr = frame[10];
+      debugPrint('Radio settings: freq=$_currentFreqHz bw=$_currentBwHz sf=$_currentSf cr=$_currentCr');
+      notifyListeners();
+    }
+  }
+
+  void _handleBatteryAndStorage(Uint8List frame) {
+    // Frame format from C++:
+    // [0] = RESP_CODE_BATT_AND_STORAGE
+    // [1-2] = battery_mv (uint16 LE)
+    // [3-6] = storage_used_kb (uint32 LE)
+    // [7-10] = storage_total_kb (uint32 LE)
+    if (frame.length >= 3) {
+      _batteryMillivolts = readUint16LE(frame, 1);
+      notifyListeners();
+    }
+  }
+
+  /// Calculate timeout for a message based on radio settings and path length
+  /// Returns timeout in milliseconds, considering number of hops
+  int calculateTimeout({required int pathLength, int messageBytes = 100}) {
+    // If we have radio settings, use them for accurate calculation
+    if (_currentFreqHz != null &&
+        _currentBwHz != null &&
+        _currentSf != null &&
+        _currentCr != null) {
+      final cr = _currentCr! <= 4 ? _currentCr! : _currentCr! - 4;
+      return calculateMessageTimeout(
+        freqHz: _currentFreqHz!,
+        bwHz: _currentBwHz!,
+        sf: _currentSf!,
+        cr: cr,
+        pathLength: pathLength,
+        messageBytes: messageBytes,
+      );
+    }
+
+    // Fallback: Conservative estimates based on typical settings
+    // Assume SF7, BW125, which gives ~50ms airtime for 100 bytes
+    const estimatedAirtime = 50;
+
+    if (pathLength < 0) {
+      // Flood mode: Base delay + 16× airtime
+      return 500 + (16 * estimatedAirtime);
+    } else {
+      // Direct path: Base delay + ((airtime×6 + 250ms)×(hops+1))
+      return 500 + ((estimatedAirtime * 6 + 250) * (pathLength + 1));
+    }
+  }
+
+  void _handleContact(Uint8List frame) {
+    final contact = Contact.fromFrame(frame);
+    if (contact != null) {
+      // Check if this is a new contact
+      final isNewContact = !_knownContactKeys.contains(contact.publicKeyHex);
+      final existingIndex = _contacts.indexWhere(
+        (c) => c.publicKeyHex == contact.publicKeyHex,
+      );
+
+      if (existingIndex >= 0) {
+        _contacts[existingIndex] = contact;
+      } else {
+        _contacts.add(contact);
+      }
+      _knownContactKeys.add(contact.publicKeyHex);
+      _loadMessagesForContact(contact.publicKeyHex);
+      notifyListeners();
+
+      // Show notification for new contact (advertisement)
+      if (isNewContact && _appSettingsService != null) {
+        final settings = _appSettingsService!.settings;
+        if (settings.notificationsEnabled && settings.notifyOnNewAdvert) {
+          _notificationService.showAdvertNotification(
+            contactName: contact.name,
+            contactType: contact.typeLabel,
+            contactId: contact.publicKeyHex,
+          );
+        }
+      }
+
+      if (!_isLoadingContacts) {
+        unawaited(_persistContacts());
+      }
+    }
+  }
+
+  Future<void> _persistContacts() async {
+    await _contactStore.saveContacts(_contacts);
+  }
+
+  int _latestContactLastmod() {
+    if (_contacts.isEmpty) return 0;
+    var latest = 0;
+    for (final contact in _contacts) {
+      final seconds = contact.lastSeen.millisecondsSinceEpoch ~/ 1000;
+      if (seconds > latest) {
+        latest = seconds;
+      }
+    }
+    return latest;
+  }
+
+  void _handleIncomingMessage(Uint8List frame) {
+    if (_selfPublicKey == null) return;
+
+    var message = _parseContactMessage(frame);
+    if (message != null) {
+      final contact = _contacts.cast<Contact?>().firstWhere(
+        (c) => c?.publicKeyHex == message!.senderKeyHex,
+        orElse: () => null,
+      );
+      if (contact != null) {
+        message = message.copyWith(
+          pathLength: contact.pathLength < 0 ? -1 : contact.pathLength,
+          pathBytes: contact.pathLength < 0 ? Uint8List(0) : contact.path,
+        );
+      }
+      if (!message.isOutgoing) {
+        final existing = _conversations[message.senderKeyHex];
+        final incomingTimestamp = message.timestamp.millisecondsSinceEpoch;
+        if (existing != null && existing.isNotEmpty) {
+          final startIndex = existing.length > 10 ? existing.length - 10 : 0;
+          for (int i = existing.length - 1; i >= startIndex; i--) {
+            final recent = existing[i];
+            if (!recent.isOutgoing &&
+                recent.timestamp.millisecondsSinceEpoch == incomingTimestamp &&
+                recent.text == message.text) {
+              return;
+            }
+          }
+        }
+      }
+      _addMessage(message.senderKeyHex, message);
+      notifyListeners();
+
+      // Show notification for new incoming message
+      if (!message.isOutgoing && !message.isCli && _appSettingsService != null) {
+        final settings = _appSettingsService!.settings;
+        if (settings.notificationsEnabled && settings.notifyOnNewMessage) {
+          // Find the contact name
+          _notificationService.showMessageNotification(
+            contactName: contact?.name ?? 'Unknown',
+            message: message.text,
+            contactId: message.senderKeyHex,
+          );
+        }
+      }
+      _handleQueuedMessageReceived();
+    } else if (_isSyncingQueuedMessages) {
+      _handleQueuedMessageReceived();
+    }
+  }
+
+  Message? _parseContactMessage(Uint8List frame) {
+    if (frame.isEmpty) return null;
+    final code = frame[0];
+    if (code != respCodeContactMsgRecv && code != respCodeContactMsgRecvV3) {
+      return null;
+    }
+
+    // Companion radio layout:
+    // [code][snr?][res?][res?][prefix x6][path_len][txt_type][timestamp x4][extra?][text...]
+    final prefixOffset = code == respCodeContactMsgRecvV3 ? 4 : 1;
+    const prefixLen = 6;
+    final pathLenOffset = prefixOffset + prefixLen;
+    final txtTypeOffset = pathLenOffset + 1;
+    final timestampOffset = txtTypeOffset + 1;
+    final baseTextOffset = timestampOffset + 4;
+
+    if (frame.length <= baseTextOffset) return null;
+
+    final senderPrefix = frame.sublist(prefixOffset, prefixOffset + prefixLen);
+    final flags = frame[txtTypeOffset];
+    final shiftedType = flags >> 2;
+    final rawType = flags;
+    final isPlain = shiftedType == txtTypePlain || rawType == txtTypePlain;
+    final isCli = shiftedType == txtTypeCliData || rawType == txtTypeCliData;
+    if (!isPlain && !isCli) {
+      return null;
+    }
+
+    // Try base text offset; if empty and there is room for the optional 4-byte extra
+    // (used by signed/plain variants), try again skipping those bytes.
+    var text = readCString(frame, baseTextOffset, frame.length - baseTextOffset);
+    if (text.isEmpty && frame.length > baseTextOffset + 4) {
+      text = readCString(frame, baseTextOffset + 4, frame.length - (baseTextOffset + 4));
+    }
+    if (text.isEmpty) return null;
+
+    final timestampRaw = readUint32LE(frame, timestampOffset);
+    final pathLenByte = frame[pathLenOffset];
+
+    final contact = _contacts.cast<Contact?>().firstWhere(
+      (c) => c != null && _matchesPrefix(c.publicKey, senderPrefix),
+      orElse: () => null,
+    );
+    if (contact == null) return null;
+
+    return Message(
+      senderKey: contact.publicKey,
+      text: text,
+      timestamp: DateTime.fromMillisecondsSinceEpoch(timestampRaw * 1000),
+      isOutgoing: false,
+      isCli: isCli,
+      status: MessageStatus.delivered,
+      pathLength: pathLenByte == 0xFF ? 0 : pathLenByte,
+      pathBytes: Uint8List(0),
+    );
+  }
+
+  bool _matchesPrefix(Uint8List fullKey, Uint8List prefix) {
+    if (fullKey.length < prefix.length) return false;
+    for (int i = 0; i < prefix.length; i++) {
+      if (fullKey[i] != prefix[i]) return false;
+    }
+    return true;
+  }
+
+  void _handleIncomingChannelMessage(Uint8List frame) {
+    final message = ChannelMessage.fromFrame(frame);
+    if (message != null && message.channelIndex != null) {
+      if (_shouldDropSelfChannelMessage(message.senderName, message.pathBytes)) {
+        return;
+      }
+      _addChannelMessage(message.channelIndex!, message);
+      notifyListeners();
+      _handleQueuedMessageReceived();
+    } else if (_isSyncingQueuedMessages) {
+      _handleQueuedMessageReceived();
+    }
+  }
+
+  void _handleLogRxData(Uint8List frame) {
+    if (frame.length < 4) return;
+    final raw = Uint8List.fromList(frame.sublist(3));
+    final packet = _parseRawPacket(raw);
+    if (packet == null || packet.payloadType != _payloadTypeGroupText) return;
+
+    final payload = packet.payload;
+    if (payload.length <= _cipherMacSize) return;
+    final channelHash = payload[0];
+    final encrypted = Uint8List.fromList(payload.sublist(1));
+
+    for (final channel in _channels) {
+      if (channel.isEmpty) continue;
+      final hash = _computeChannelHash(channel.psk);
+      if (hash != channelHash) continue;
+
+      final decrypted = _decryptPayload(channel.psk, encrypted);
+      if (decrypted == null || decrypted.length < 6) return;
+
+      final txtType = decrypted[4];
+      if ((txtType >> 2) != 0) {
+        return;
+      }
+
+      final timestampRaw = readUint32LE(decrypted, 0);
+      final text = readCString(decrypted, 5, decrypted.length - 5);
+      final parsed = _splitSenderText(text);
+      final decodedText = Smaz.tryDecodePrefixed(parsed.text) ?? parsed.text;
+      if (_shouldDropSelfChannelMessage(parsed.senderName, packet.pathBytes)) {
+        return;
+      }
+
+      final message = ChannelMessage(
+        senderKey: null,
+        senderName: parsed.senderName,
+        text: decodedText,
+        timestamp: DateTime.fromMillisecondsSinceEpoch(timestampRaw * 1000),
+        isOutgoing: false,
+        status: ChannelMessageStatus.sent,
+        pathLength: packet.isFlood ? packet.pathBytes.length : 0,
+        pathBytes: packet.pathBytes,
+        channelIndex: channel.index,
+      );
+
+      _addChannelMessage(channel.index, message);
+      notifyListeners();
+      return;
+    }
+  }
+
+  void _handleMessageSent(Uint8List frame) {
+    // Frame format from C++:
+    // [0] = RESP_CODE_SENT
+    // [1] = is_flood (1 or 0)
+    // [2-5] = expected_ack_hash (uint32)
+    // [6-9] = estimated_timeout_ms (uint32)
+
+    if (frame.length >= 10 && _retryService != null) {
+      final ackHash = Uint8List.fromList(frame.sublist(2, 6));
+      final timeoutMs = readUint32LE(frame, 6);
+
+      _retryService!.updateMessageFromSent(ackHash, timeoutMs);
+    } else {
+      // Fallback to old behavior
+      for (var messages in _conversations.values) {
+        for (int i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].isOutgoing && messages[i].status == MessageStatus.pending) {
+            messages[i] = messages[i].copyWith(status: MessageStatus.sent);
+            notifyListeners();
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  void _handleSendConfirmed(Uint8List frame) {
+    // Frame format from C++:
+    // [0] = PUSH_CODE_SEND_CONFIRMED
+    // [1-4] = ack_hash (uint32)
+    // [5-8] = trip_time_ms (uint32)
+
+    if (frame.length >= 9) {
+      final ackHash = Uint8List.fromList(frame.sublist(1, 5));
+      final tripTimeMs = readUint32LE(frame, 5);
+
+      // Handle ACK in retry service
+      if (_retryService != null) {
+        _retryService!.handleAckReceived(ackHash, tripTimeMs);
+      }
+    } else {
+      // Fallback to old behavior
+      for (var messages in _conversations.values) {
+        for (int i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].isOutgoing && messages[i].status == MessageStatus.sent) {
+            messages[i] = messages[i].copyWith(status: MessageStatus.delivered);
+            notifyListeners();
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  void _handleChannelInfo(Uint8List frame) {
+    final channel = Channel.fromFrame(frame);
+    if (channel != null && !channel.isEmpty) {
+      _channels.add(channel);
+      _applyChannelOrder();
+      notifyListeners();
+    }
+  }
+
+  void _applyChannelOrder() {
+    if (_channelOrder.isEmpty) {
+      _channels.sort((a, b) => a.index.compareTo(b.index));
+      return;
+    }
+
+    final orderIndex = <int, int>{};
+    for (int i = 0; i < _channelOrder.length; i++) {
+      orderIndex[_channelOrder[i]] = i;
+    }
+
+    _channels.sort((a, b) {
+      final aPos = orderIndex[a.index];
+      final bPos = orderIndex[b.index];
+      if (aPos != null && bPos != null) return aPos.compareTo(bPos);
+      if (aPos != null) return -1;
+      if (bPos != null) return 1;
+      return a.index.compareTo(b.index);
+    });
+  }
+
+  Future<void> setChannelOrder(List<int> order) async {
+    _channelOrder = List<int>.from(order);
+    _applyChannelOrder();
+    await _channelOrderStore.saveChannelOrder(_channelOrder);
+    notifyListeners();
+  }
+
+  void _addMessage(String pubKeyHex, Message message) {
+    _conversations.putIfAbsent(pubKeyHex, () => []);
+    _conversations[pubKeyHex]!.add(message);
+    _messageStore.saveMessages(pubKeyHex, _conversations[pubKeyHex]!);
+    notifyListeners();
+  }
+
+  _RawPacket? _parseRawPacket(Uint8List raw) {
+    if (raw.length < 3) return null;
+    var index = 0;
+    final header = raw[index++];
+    final routeType = header & _phRouteMask;
+    final hasTransport = routeType == _routeTransportFlood || routeType == _routeTransportDirect;
+    if (hasTransport) {
+      if (raw.length < index + 4) return null;
+      index += 4;
+    }
+    if (raw.length <= index) return null;
+    final pathLen = raw[index++];
+    if (raw.length < index + pathLen) return null;
+    final pathBytes = Uint8List.fromList(raw.sublist(index, index + pathLen));
+    index += pathLen;
+    if (raw.length <= index) return null;
+    final payload = Uint8List.fromList(raw.sublist(index));
+
+    return _RawPacket(
+      header: header,
+      routeType: routeType,
+      payloadType: (header >> _phTypeShift) & _phTypeMask,
+      payloadVer: (header >> _phVerShift) & _phVerMask,
+      pathBytes: pathBytes,
+      payload: payload,
+    );
+  }
+
+  int _computeChannelHash(Uint8List psk) {
+    final digest = crypto.sha256.convert(psk).bytes;
+    return digest[0];
+  }
+
+  Uint8List? _decryptPayload(Uint8List psk, Uint8List encrypted) {
+    if (encrypted.length <= _cipherMacSize) return null;
+    final mac = encrypted.sublist(0, _cipherMacSize);
+    final cipherText = encrypted.sublist(_cipherMacSize);
+
+    final key32 = Uint8List(32);
+    final copyLen = psk.length < 32 ? psk.length : 32;
+    key32.setRange(0, copyLen, psk);
+
+    final hmac = crypto.Hmac(crypto.sha256, key32).convert(cipherText).bytes;
+    if (hmac[0] != mac[0] || hmac[1] != mac[1]) {
+      return null;
+    }
+
+    if (cipherText.isEmpty || cipherText.length % 16 != 0) return null;
+    final key16 = Uint8List(16);
+    final keyLen = psk.length < 16 ? psk.length : 16;
+    key16.setRange(0, keyLen, psk);
+
+    final cipher = ECBBlockCipher(AESFastEngine());
+    cipher.init(false, KeyParameter(key16));
+    final out = Uint8List(cipherText.length);
+    for (var i = 0; i < cipherText.length; i += 16) {
+      cipher.processBlock(cipherText, i, out, i);
+    }
+    return out;
+  }
+
+  _ParsedText _splitSenderText(String text) {
+    final colonIndex = text.indexOf(':');
+    if (colonIndex > 0 && colonIndex < text.length - 1 && colonIndex < 50) {
+      final potentialSender = text.substring(0, colonIndex);
+      if (RegExp(r'[:\[\]]').hasMatch(potentialSender)) {
+        return _ParsedText(senderName: 'Unknown', text: text);
+      }
+      final offset = (colonIndex + 1 < text.length && text[colonIndex + 1] == ' ')
+          ? colonIndex + 2
+          : colonIndex + 1;
+      return _ParsedText(
+        senderName: potentialSender,
+        text: text.substring(offset),
+      );
+    }
+    return _ParsedText(senderName: 'Unknown', text: text);
+  }
+
+  Uint8List _resolveOutgoingPathBytes(
+    Contact contact,
+    Uint8List? customPath,
+    int? customPathLen,
+    bool forceFlood,
+    PathSelection? selection,
+  ) {
+    if (forceFlood || contact.pathLength < 0 || selection?.useFlood == true) {
+      return Uint8List(0);
+    }
+    if (customPath != null && customPathLen != null && customPathLen > 0) {
+      return Uint8List.fromList(customPath.sublist(0, customPathLen));
+    }
+    if (selection != null && selection.pathBytes.isNotEmpty) {
+      return Uint8List.fromList(selection.pathBytes);
+    }
+    return contact.path;
+  }
+
+  int? _resolveOutgoingPathLength(
+    Contact contact,
+    int? customPathLen,
+    bool forceFlood,
+    PathSelection? selection,
+  ) {
+    if (forceFlood || contact.pathLength < 0 || selection?.useFlood == true) {
+      return -1;
+    }
+    if (customPathLen != null && customPathLen > 0) {
+      return customPathLen;
+    }
+    if (selection != null && selection.pathBytes.isNotEmpty) {
+      return selection.hopCount;
+    }
+    return contact.pathLength;
+  }
+
+  void _addChannelMessage(int channelIndex, ChannelMessage message) {
+    _channelMessages.putIfAbsent(channelIndex, () => []);
+    final messages = _channelMessages[channelIndex]!;
+    final existingIndex = _findChannelRepeatIndex(messages, message);
+    if (existingIndex >= 0) {
+      final existing = messages[existingIndex];
+      final mergedPathBytes = existing.pathBytes.isEmpty ? message.pathBytes : existing.pathBytes;
+      messages[existingIndex] = existing.copyWith(
+        repeatCount: existing.repeatCount + 1,
+        pathLength: message.pathLength ?? existing.pathLength,
+        pathBytes: mergedPathBytes,
+      );
+    } else {
+      messages.add(message);
+    }
+
+    // Save to persistent storage
+    _channelMessageStore.saveChannelMessages(
+      channelIndex,
+      messages,
+    );
+  }
+
+  int _findChannelRepeatIndex(List<ChannelMessage> messages, ChannelMessage incoming) {
+    for (int i = messages.length - 1; i >= 0; i--) {
+      final existing = messages[i];
+      if (_isChannelRepeat(existing, incoming)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  bool _isChannelRepeat(ChannelMessage existing, ChannelMessage incoming) {
+    if (existing.text != incoming.text) return false;
+
+    final diffMs = (existing.timestamp.millisecondsSinceEpoch -
+            incoming.timestamp.millisecondsSinceEpoch)
+        .abs();
+    if (diffMs > 5000) return false;
+
+    if (existing.senderName == incoming.senderName) return true;
+
+    if (existing.isOutgoing && !incoming.isOutgoing) {
+      final selfName = _selfName ?? 'Me';
+      if (incoming.senderName == selfName || existing.senderName == selfName) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  bool _shouldDropSelfChannelMessage(String senderName, Uint8List pathBytes) {
+    final selfKey = _selfPublicKey;
+    if (selfKey == null) return false;
+    if (pathBytes.length < pathHashSize) return false;
+    final trimmed = senderName.trim();
+    if (trimmed.isEmpty) return false;
+    final selfName = _selfName?.trim();
+    if (selfName == null || selfName.isEmpty) return false;
+    if (trimmed != selfName) return false;
+    final prefix = selfKey.sublist(0, pathHashSize);
+    for (int i = 0; i + pathHashSize <= pathBytes.length; i += pathHashSize) {
+      var match = true;
+      for (int j = 0; j < pathHashSize; j++) {
+        if (pathBytes[i + j] != prefix[j]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _handleDisconnection() {
+    _notifySubscription?.cancel();
+    _notifySubscription = null;
+    _connectionSubscription?.cancel();
+    _connectionSubscription = null;
+
+    _device = null;
+    _rxCharacteristic = null;
+    _txCharacteristic = null;
+    _maxContacts = _defaultMaxContacts;
+    _maxChannels = _defaultMaxChannels;
+    _isSyncingQueuedMessages = false;
+    _queuedMessageSyncInFlight = false;
+
+    _setState(MeshCoreConnectionState.disconnected);
+  }
+
+  void _setState(MeshCoreConnectionState newState) {
+    if (_state != newState) {
+      _state = newState;
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scanSubscription?.cancel();
+    _connectionSubscription?.cancel();
+    _notifySubscription?.cancel();
+    _receivedFramesController.close();
+    super.dispose();
+  }
+}
+
+const int _phRouteMask = 0x03;
+const int _phTypeShift = 2;
+const int _phTypeMask = 0x0F;
+const int _phVerShift = 6;
+const int _phVerMask = 0x03;
+
+const int _routeTransportFlood = 0x00;
+const int _routeFlood = 0x01;
+const int _routeDirect = 0x02;
+const int _routeTransportDirect = 0x03;
+
+const int _payloadTypeGroupText = 0x05;
+const int _cipherMacSize = 2;
+
+class _RawPacket {
+  final int header;
+  final int routeType;
+  final int payloadType;
+  final int payloadVer;
+  final Uint8List pathBytes;
+  final Uint8List payload;
+
+  _RawPacket({
+    required this.header,
+    required this.routeType,
+    required this.payloadType,
+    required this.payloadVer,
+    required this.pathBytes,
+    required this.payload,
+  });
+
+  bool get isFlood => routeType == _routeFlood || routeType == _routeTransportFlood;
+}
+
+class _ParsedText {
+  final String senderName;
+  final String text;
+
+  _ParsedText({
+    required this.senderName,
+    required this.text,
+  });
+}

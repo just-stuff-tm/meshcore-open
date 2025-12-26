@@ -1,0 +1,170 @@
+import 'dart:typed_data';
+import '../connector/meshcore_protocol.dart';
+import '../helpers/smaz.dart';
+
+enum ChannelMessageStatus { pending, sent, failed }
+
+class Repeat {
+  final Uint8List? repeaterKey;
+  final String repeaterName;
+  final int tripTimeMs;
+  final List<Uint8List>? path;
+
+  Repeat({
+    this.repeaterKey,
+    required this.repeaterName,
+    required this.tripTimeMs,
+    this.path,
+  });
+
+  String? get repeaterKeyHex =>
+      repeaterKey != null ? pubKeyToHex(repeaterKey!) : null;
+}
+
+class ChannelMessage {
+  final Uint8List? senderKey;
+  final String senderName;
+  final String text;
+  final DateTime timestamp;
+  final bool isOutgoing;
+  final ChannelMessageStatus status;
+  final List<Repeat> repeats;
+  final int repeatCount;
+  final int? pathLength;
+  final Uint8List pathBytes;
+  final int? channelIndex;
+
+  ChannelMessage({
+    this.senderKey,
+    required this.senderName,
+    required this.text,
+    required this.timestamp,
+    required this.isOutgoing,
+    this.status = ChannelMessageStatus.pending,
+    this.repeats = const [],
+    this.repeatCount = 0,
+    this.pathLength,
+    Uint8List? pathBytes,
+    this.channelIndex,
+  }) : pathBytes = pathBytes ?? Uint8List(0);
+
+  String? get senderKeyHex => senderKey != null ? pubKeyToHex(senderKey!) : null;
+
+  ChannelMessage copyWith({
+    ChannelMessageStatus? status,
+    List<Repeat>? repeats,
+    int? repeatCount,
+    int? pathLength,
+    Uint8List? pathBytes,
+  }) {
+    return ChannelMessage(
+      senderKey: senderKey,
+      senderName: senderName,
+      text: text,
+      timestamp: timestamp,
+      isOutgoing: isOutgoing,
+      status: status ?? this.status,
+      repeats: repeats ?? this.repeats,
+      repeatCount: repeatCount ?? this.repeatCount,
+      pathLength: pathLength ?? this.pathLength,
+      pathBytes: pathBytes ?? this.pathBytes,
+      channelIndex: channelIndex,
+    );
+  }
+
+  static ChannelMessage? fromFrame(Uint8List data) {
+    // CHANNEL_MSG_RECV format varies by version:
+    // V3: [0]=code [1]=SNR [2]=rsv1 [3]=rsv2 [4]=channel_idx [5]=path_len [path... optional] [txt_type] [timestamp x4] [text...]
+    // Non-V3: [0]=code [1]=channel_idx [2]=path_len [3]=txt_type [4-7]=timestamp [8+]=text
+    if (data.length < 8) return null;
+
+    final code = data[0];
+    if (code != respCodeChannelMsgRecv && code != respCodeChannelMsgRecvV3) {
+      return null;
+    }
+
+    int timestampOffset, textOffset, pathLenOffset, txtTypeOffset;
+    Uint8List pathBytes = Uint8List(0);
+    int channelIdx;
+
+    if (code == respCodeChannelMsgRecvV3) {
+      channelIdx = data[4];
+      pathLenOffset = 5;
+      final pathLen = data[pathLenOffset].toSigned(8);
+      var cursor = 6;
+      final hasPathBytesFlag = (data[2] & 0x01) != 0;
+      final canFitPath = pathLen > 0 && data.length >= cursor + pathLen + 5;
+      final hasValidTxtType =
+          cursor < data.length && (data[cursor] == txtTypePlain || data[cursor] == txtTypeCliData);
+      if ((hasPathBytesFlag || (canFitPath && !hasValidTxtType)) && canFitPath) {
+        pathBytes = Uint8List.fromList(data.sublist(cursor, cursor + pathLen));
+        cursor += pathLen;
+      }
+      txtTypeOffset = cursor;
+      cursor += 1; // txt_type
+      timestampOffset = cursor;
+      textOffset = cursor + 4;
+    } else {
+      channelIdx = data[1];
+      pathLenOffset = 2;
+      txtTypeOffset = 3;
+      timestampOffset = 4;
+      textOffset = 8;
+    }
+
+    if (data.length < textOffset + 1) return null;
+
+    final txtType = data[txtTypeOffset];
+    if (txtType != txtTypePlain) {
+      return null;
+    }
+
+    final pathLen = data[pathLenOffset].toSigned(8);
+    final timestampRaw = readUint32LE(data, timestampOffset);
+    final text = readCString(data, textOffset, data.length - textOffset);
+
+    // Extract sender name and actual message from "name: msg" format
+    String senderName = 'Unknown';
+    String actualText = text;
+
+    final colonIndex = text.indexOf(':');
+    if (colonIndex > 0 && colonIndex < text.length - 1 && colonIndex < 50) {
+      final potentialSender = text.substring(0, colonIndex);
+      if (!RegExp(r'[:\[\]]').hasMatch(potentialSender)) {
+        senderName = potentialSender;
+        final offset = (colonIndex + 1 < text.length && text[colonIndex + 1] == ' ')
+            ? colonIndex + 2
+            : colonIndex + 1;
+        actualText = text.substring(offset);
+      }
+    }
+
+    final decodedText = Smaz.tryDecodePrefixed(actualText) ?? actualText;
+
+    return ChannelMessage(
+      senderKey: null,
+      senderName: senderName,
+      text: decodedText,
+      timestamp: DateTime.fromMillisecondsSinceEpoch(timestampRaw * 1000),
+      isOutgoing: false,
+      status: ChannelMessageStatus.sent,
+      pathLength: pathLen,
+      pathBytes: pathBytes,
+      channelIndex: channelIdx,
+    );
+  }
+
+  static ChannelMessage outgoing(String text, String senderName, int channelIndex) {
+    return ChannelMessage(
+      senderKey: null,
+      senderName: senderName,
+      text: text,
+      timestamp: DateTime.now(),
+      isOutgoing: true,
+      status: ChannelMessageStatus.pending,
+      pathLength: null,
+      pathBytes: Uint8List(0),
+      channelIndex: channelIndex,
+    );
+  }
+}
