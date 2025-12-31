@@ -184,7 +184,24 @@ class _RepeaterSettingsScreenState extends State<RepeaterSettingsScreen> {
       }
 
       if (_fetchedSettings.containsKey('tx')) {
-        _txPowerController.text = _fetchedSettings['tx']!;
+        final txValue = _fetchedSettings['tx']!;
+        // Extract just the power value if it's part of a larger response
+        // Handle formats like "10", "10 dBm", or "908.205017,62.5,10,7"
+        final parts = txValue.split(',');
+        if (parts.length >= 3) {
+          // If comma-separated (likely radio format), TX power is typically the 3rd or 4th value
+          // Format: freq,bandwidth,sf,cr OR freq,bandwidth,power,sf,cr
+          final powerCandidate = parts.length > 3 ? parts[2].trim() : parts.last.trim();
+          final powerInt = int.tryParse(powerCandidate.replaceAll(RegExp(r'[^0-9-]'), ''));
+          if (powerInt != null && powerInt >= 1 && powerInt <= 30) {
+            _txPowerController.text = powerInt.toString();
+          } else {
+            _txPowerController.text = txValue.replaceAll(RegExp(r'[^0-9-]'), '');
+          }
+        } else {
+          // Simple format, just extract the number
+          _txPowerController.text = txValue.replaceAll(RegExp(r'[^0-9-]'), '');
+        }
       }
 
       if (_fetchedSettings.containsKey('lat')) {

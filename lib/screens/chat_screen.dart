@@ -413,10 +413,20 @@ class _ChatScreenState extends State<ChatScreen> {
                               return;
                             }
 
+                            final pathBytes = Uint8List.fromList(path.pathBytes);
+                            final pathLength = path.pathBytes.length;
+
                             await connector.setContactPath(
                               widget.contact,
-                              Uint8List.fromList(path.pathBytes),
-                              path.pathBytes.length,
+                              pathBytes,
+                              pathLength,
+                            );
+
+                            // Update contact in memory directly for immediate UI feedback
+                            connector.updateContactInMemory(
+                              widget.contact.publicKeyHex,
+                              pathBytes: pathBytes,
+                              pathLength: pathLength,
                             );
 
                             if (!context.mounted) return;

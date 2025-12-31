@@ -117,6 +117,7 @@ class MeshCoreConnector extends ChangeNotifier {
   final ContactStore _contactStore = ContactStore();
   final UnreadStore _unreadStore = UnreadStore();
   final Map<int, bool> _channelSmazEnabled = {};
+  bool _lastSentWasCliCommand = false; // Track if last sent message was a CLI command
   final Map<String, bool> _contactSmazEnabled = {};
   final Set<String> _knownContactKeys = {};
   final Map<String, int> _contactLastReadMs = {};
@@ -459,6 +460,7 @@ class MeshCoreConnector extends ChangeNotifier {
       addMessageCallback: _addMessage,
       updateMessageCallback: _updateMessage,
       clearContactPathCallback: clearContactPath,
+      setContactPathCallback: setContactPath,
       calculateTimeoutCallback: (pathLength, messageBytes) =>
           calculateTimeout(pathLength: pathLength, messageBytes: messageBytes),
       appSettingsService: appSettingsService,
@@ -1040,6 +1042,24 @@ class MeshCoreConnector extends ChangeNotifier {
     // The device will send updated contact info with path_len = -1
   }
 
+  void updateContactInMemory(
+    String publicKeyHex, {
+    Uint8List? pathBytes,
+    int? pathLength,
+  }) {
+    final existingIndex =
+        _contacts.indexWhere((c) => c.publicKeyHex == publicKeyHex);
+    if (existingIndex >= 0) {
+      final existing = _contacts[existingIndex];
+      _contacts[existingIndex] = existing.copyWith(
+        pathLength: pathLength,
+        path: pathBytes,
+      );
+      notifyListeners();
+      unawaited(_persistContacts());
+    }
+  }
+
   Future<void> syncTime() async {
     if (!isConnected) return;
 
@@ -1080,6 +1100,7 @@ class MeshCoreConnector extends ChangeNotifier {
     // CLI commands are sent as UTF-8 text with a special prefix
     final commandBytes = utf8.encode(command);
     final bytes = Uint8List.fromList([0x01, ...commandBytes, 0x00]);
+    _lastSentWasCliCommand = true;
     await sendFrame(bytes);
   }
 
@@ -1120,7 +1141,10 @@ class MeshCoreConnector extends ChangeNotifier {
       await sendFrame(buildGetChannelFrame(i));
     }
 
+    // Wait a bit for responses to arrive, then apply final sort
+    await Future.delayed(const Duration(seconds: 2));
     _isLoadingChannels = false;
+    _applyChannelOrder();
     notifyListeners();
   }
 
@@ -1416,6 +1440,12 @@ class MeshCoreConnector extends ChangeNotifier {
       }
       _knownContactKeys.add(contact.publicKeyHex);
       _loadMessagesForContact(contact.publicKeyHex);
+
+      // Add path to history if we have a valid path
+      if (_pathHistoryService != null && contact.pathLength >= 0) {
+        _pathHistoryService!.handlePathUpdated(contact);
+      }
+
       notifyListeners();
 
       // Show notification for new contact (advertisement)
@@ -1797,6 +1827,14 @@ class MeshCoreConnector extends ChangeNotifier {
       final ackHash = Uint8List.fromList(frame.sublist(2, 6));
       final timeoutMs = readUint32LE(frame, 6);
 
+      // Check if this is a CLI command ACK - if so, ignore it
+      if (_lastSentWasCliCommand) {
+        final ackHashHex = ackHash.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+        debugPrint('Ignoring CLI command ACK (sent): $ackHashHex');
+        _lastSentWasCliCommand = false;
+        return;
+      }
+
       if (_retryService != null) {
         _retryService!.updateMessageFromSent(ackHash, timeoutMs);
       }
@@ -1824,6 +1862,8 @@ class MeshCoreConnector extends ChangeNotifier {
       final ackHash = Uint8List.fromList(frame.sublist(1, 5));
       final tripTimeMs = readUint32LE(frame, 5);
 
+      // CLI command ACKs are already filtered in _handleMessageSent, so this should only see real messages
+
       // Handle ACK in retry service
       if (_retryService != null) {
         _retryService!.handleAckReceived(ackHash, tripTimeMs);
@@ -1846,7 +1886,11 @@ class MeshCoreConnector extends ChangeNotifier {
     final channel = Channel.fromFrame(frame);
     if (channel != null && !channel.isEmpty) {
       _channels.add(channel);
-      _applyChannelOrder();
+      // Only sort and notify if we're not currently loading channels
+      // This prevents the list from jumping around as channels arrive during refresh
+      if (!_isLoadingChannels) {
+        _applyChannelOrder();
+      }
       notifyListeners();
     }
   }
