@@ -27,6 +27,7 @@ RUN apt-get update \
     xz-utils \
     zip \
     chromium \
+  && if [ -x /usr/bin/chromium-browser ] && [ ! -e /usr/bin/chromium ]; then ln -s /usr/bin/chromium-browser /usr/bin/chromium; fi \
   && rm -rf /var/lib/apt/lists/*
 
 # Install Flutter SDK.
