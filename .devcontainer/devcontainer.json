@@ -10,11 +10,8 @@
     "ANDROID_SDK_ROOT": "/opt/android-sdk",
     "CHROME_EXECUTABLE": "/usr/bin/chromium",
     "FLUTTER_ROOT": "/opt/flutter",
-    "PUB_CACHE": "/home/vscode/.pub-cache"
+    "PUB_CACHE": "/tmp/.pub-cache"
   },
-  "mounts": [
-    "source=meshcore-open-pub-cache,target=/home/vscode/.pub-cache,type=volume"
-  ],
   "customizations": {
     "vscode": {
       "extensions": [
