@@ -2,6 +2,10 @@
 
 This folder defines the development container used by Codespaces and local Dev Containers for this Flutter project.
 
+## Validation Log
+
+- Latest environment and verification output: [`TESTLOG.md`](TESTLOG.md)
+
 ## What This Setup Does
 
 - Builds from `mcr.microsoft.com/devcontainers/base:ubuntu-24.04`.
