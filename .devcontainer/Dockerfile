@@ -2,9 +2,6 @@ FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-ARG FLUTTER_VERSION=3.41.0
-ARG ANDROID_CMDLINE_TOOLS_VERSION=11076708
-
 ENV FLUTTER_ROOT=/opt/flutter \
     ANDROID_SDK_ROOT=/opt/android-sdk \
     ANDROID_HOME=/opt/android-sdk
@@ -32,11 +29,12 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # Install Flutter SDK.
-RUN git clone --depth 1 --branch ${FLUTTER_VERSION} https://github.com/flutter/flutter.git ${FLUTTER_ROOT}
+RUN git clone --depth 1 --branch stable https://github.com/flutter/flutter.git ${FLUTTER_ROOT}
 
 # Install Android SDK command line tools.
 RUN mkdir -p ${ANDROID_SDK_ROOT}/cmdline-tools /tmp/android-cmdline \
-  && wget -q https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_CMDLINE_TOOLS_VERSION}_latest.zip -O /tmp/cmdline-tools.zip \
+  && CMDLINE_TOOLS_ZIP="$(wget -qO- https://dl.google.com/android/repository/repository2-1.xml | grep -oE 'commandlinetools-linux-[0-9]+_latest.zip' | sort -uV | tail -n1)" \
+  && wget -q "https://dl.google.com/android/repository/${CMDLINE_TOOLS_ZIP}" -O /tmp/cmdline-tools.zip \
   && unzip -q /tmp/cmdline-tools.zip -d /tmp/android-cmdline \
   && mv /tmp/android-cmdline/cmdline-tools ${ANDROID_SDK_ROOT}/cmdline-tools/latest \
   && rm -rf /tmp/cmdline-tools.zip /tmp/android-cmdline
@@ -45,10 +43,12 @@ ENV PATH=${FLUTTER_ROOT}/bin:${FLUTTER_ROOT}/bin/cache/dart-sdk/bin:${ANDROID_SD
 
 # Preinstall Android components needed by Flutter and accept licenses.
 RUN yes | sdkmanager --licenses >/dev/null \
+  && LATEST_PLATFORM="$(sdkmanager --list | awk -F'|' '/platforms;android-[0-9]+/ {gsub(/ /, \"\", $1); print $1}' | sort -uV | tail -n1)" \
+  && LATEST_BUILD_TOOLS="$(sdkmanager --list | awk -F'|' '/build-tools;[0-9]+\\.[0-9]+\\.[0-9]+/ {gsub(/ /, \"\", $1); print $1}' | sort -uV | tail -n1)" \
   && sdkmanager \
     "platform-tools" \
-    "platforms;android-35" \
-    "build-tools;35.0.0"
+    "${LATEST_PLATFORM}" \
+    "${LATEST_BUILD_TOOLS}"
 
 # Configure Flutter + pre-cache assets for an immediate first run.
 RUN flutter config --no-analytics --android-sdk ${ANDROID_SDK_ROOT} --enable-android --enable-linux-desktop --enable-web \
