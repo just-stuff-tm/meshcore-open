@@ -46,14 +46,12 @@ ENV PATH=${FLUTTER_ROOT}/bin:${FLUTTER_ROOT}/bin/cache/dart-sdk/bin:${ANDROID_SD
 # Preinstall Android components needed by Flutter and accept licenses.
 RUN yes | sdkmanager --licenses >/dev/null \
   && sdkmanager \
-    "cmdline-tools;latest" \
     "platform-tools" \
     "platforms;android-35" \
     "build-tools;35.0.0"
 
 # Configure Flutter + pre-cache assets for an immediate first run.
 RUN flutter config --no-analytics --android-sdk ${ANDROID_SDK_ROOT} --enable-android --enable-linux-desktop --enable-web \
-  && flutter --disable-telemetry \
   && flutter precache --android --linux --web
 
 # Ensure vscode user can write to SDK folders.
