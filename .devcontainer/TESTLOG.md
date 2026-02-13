@@ -5,7 +5,7 @@ Environment verification run captured in Codespaces.
 ## Run Output
 
 ```text
-@just-stuff-tm ➜ /workspaces/meshcore-open (main) $ flutter doctor -v
+@developer ➜ /workspaces/meshcore-open (main) $ flutter doctor -v
 [✓] Flutter (Channel stable, 3.41.0, on Ubuntu 24.04.3 LTS 6.8.0-1030-azure,
     locale en_US.UTF-8) [45ms]
     • Flutter version 3.41.0 on channel stable at /opt/flutter
@@ -52,7 +52,7 @@ Environment verification run captured in Codespaces.
     • All expected network resources are available.
 
 • No issues found!
-@just-stuff-tm ➜ /workspaces/meshcore-open (main) $ flutter pub get
+@developer ➜ /workspaces/meshcore-open (main) $ flutter pub get
 Resolving dependencies... 
 Downloading packages... 
   dbus 0.7.11 (0.7.12 available)
@@ -85,10 +85,10 @@ Downloading packages...
 Got dependencies!
 27 packages have newer versions incompatible with dependency constraints.
 Try `flutter pub outdated` for more information.
-@just-stuff-tm ➜ /workspaces/meshcore-open (main) $ flutter analyze
+@developer ➜ /workspaces/meshcore-open (main) $ flutter analyze
 Analyzing meshcore-open...                                              
 No issues found! (ran in 3.1s)
-@just-stuff-tm ➜ /workspaces/meshcore-open (main) $ flutter test
+@developer ➜ /workspaces/meshcore-open (main) $ flutter test
 00:11 +33: All tests passed!                                                     
-@just-stuff-tm ➜ /workspaces/meshcore-open (main) $
+@developer ➜ /workspaces/meshcore-open (main) $
 ```
