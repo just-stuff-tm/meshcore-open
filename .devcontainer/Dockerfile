@@ -4,7 +4,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 ENV FLUTTER_ROOT=/opt/flutter \
     ANDROID_SDK_ROOT=/opt/android-sdk \
-    ANDROID_HOME=/opt/android-sdk
+    ANDROID_HOME=/opt/android-sdk \
+    JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
 # Core tooling + Flutter Linux desktop prerequisites.
 RUN apt-get update \
@@ -42,17 +43,11 @@ RUN mkdir -p ${ANDROID_SDK_ROOT}/cmdline-tools /tmp/android-cmdline \
 ENV PATH=${FLUTTER_ROOT}/bin:${FLUTTER_ROOT}/bin/cache/dart-sdk/bin:${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${PATH}
 
 # Preinstall Android components needed by Flutter and accept licenses.
-RUN yes | sdkmanager --licenses >/dev/null \
-  && wget -qO /tmp/android-repo.xml https://dl.google.com/android/repository/repository2-1.xml \
-  && LATEST_PLATFORM="$(grep -oE 'path=\"platforms;android-[0-9]+\"' /tmp/android-repo.xml | sed -E 's/^path=\"(.*)\"$/\1/' | sort -uV | tail -n1)" \
-  && LATEST_BUILD_TOOLS="$(grep -oE 'path=\"build-tools;[0-9]+\\.[0-9]+\\.[0-9]+\"' /tmp/android-repo.xml | sed -E 's/^path=\"(.*)\"$/\1/' | sort -uV | tail -n1)" \
-  && test -n "${LATEST_PLATFORM}" \
-  && test -n "${LATEST_BUILD_TOOLS}" \
-  && sdkmanager \
+RUN yes | sdkmanager --sdk_root=${ANDROID_SDK_ROOT} --licenses >/dev/null \
+  && sdkmanager --sdk_root=${ANDROID_SDK_ROOT} \
     "platform-tools" \
-    "${LATEST_PLATFORM}" \
-    "${LATEST_BUILD_TOOLS}" \
-  && rm -f /tmp/android-repo.xml
+    "platforms;android-34" \
+    "build-tools;34.0.0"
 
 # Configure Flutter + pre-cache assets for an immediate first run.
 RUN flutter config --no-analytics --android-sdk ${ANDROID_SDK_ROOT} --enable-android --enable-linux-desktop --enable-web \
