@@ -1,0 +1,36 @@
+{
+  "name": "MeshCore Flutter Dev",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "ANDROID_HOME": "/opt/android-sdk",
+    "ANDROID_SDK_ROOT": "/opt/android-sdk",
+    "CHROME_EXECUTABLE": "/usr/bin/chromium",
+    "FLUTTER_ROOT": "/opt/flutter",
+    "PUB_CACHE": "/home/vscode/.pub-cache"
+  },
+  "mounts": [
+    "source=meshcore-open-pub-cache,target=/home/vscode/.pub-cache,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Dart-Code.dart-code",
+        "Dart-Code.flutter",
+        "eamodio.gitlens",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "dart.flutterSdkPath": "/opt/flutter",
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "initializeCommand": "bash .devcontainer/scripts/validate-host.sh",
+  "onCreateCommand": "bash .devcontainer/scripts/post-create.sh",
+  "updateContentCommand": "flutter pub get",
+  "postStartCommand": "bash .devcontainer/scripts/doctor-summary.sh"
+}
