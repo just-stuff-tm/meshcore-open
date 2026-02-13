@@ -43,8 +43,8 @@ ENV PATH=${FLUTTER_ROOT}/bin:${FLUTTER_ROOT}/bin/cache/dart-sdk/bin:${ANDROID_SD
 
 # Preinstall Android components needed by Flutter and accept licenses.
 RUN yes | sdkmanager --licenses >/dev/null \
-  && LATEST_PLATFORM="$(sdkmanager --list | awk -F'|' '/platforms;android-[0-9]+/ {gsub(/ /, \"\", $1); print $1}' | sort -uV | tail -n1)" \
-  && LATEST_BUILD_TOOLS="$(sdkmanager --list | awk -F'|' '/build-tools;[0-9]+\\.[0-9]+\\.[0-9]+/ {gsub(/ /, \"\", $1); print $1}' | sort -uV | tail -n1)" \
+  && LATEST_PLATFORM="$(sdkmanager --list | grep -oE 'platforms;android-[0-9]+' | sort -uV | tail -n1)" \
+  && LATEST_BUILD_TOOLS="$(sdkmanager --list | grep -oE 'build-tools;[0-9]+\\.[0-9]+\\.[0-9]+' | sort -uV | tail -n1)" \
   && sdkmanager \
     "platform-tools" \
     "${LATEST_PLATFORM}" \
