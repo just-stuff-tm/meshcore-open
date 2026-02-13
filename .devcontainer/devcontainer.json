@@ -8,7 +8,7 @@
   "containerEnv": {
     "ANDROID_HOME": "/opt/android-sdk",
     "ANDROID_SDK_ROOT": "/opt/android-sdk",
-    "CHROME_EXECUTABLE": "/usr/bin/chromium-browser",
+    "CHROME_EXECUTABLE": "/usr/bin/chromium",
     "FLUTTER_ROOT": "/opt/flutter",
     "PUB_CACHE": "/tmp/.pub-cache"
   },
