@@ -144,6 +144,16 @@ class AppLocalizationsDe extends AppLocalizations {
   String get scanner_scan => 'Scannen';
 
   @override
+  String get scanner_bluetoothOff => 'Bluetooth ist deaktiviert.';
+
+  @override
+  String get scanner_bluetoothOffMessage =>
+      'Bitte aktivieren Sie Bluetooth, um nach Geräten zu suchen.';
+
+  @override
+  String get scanner_enableBluetooth => 'Bluetooth aktivieren';
+
+  @override
   String get device_quickSwitch => 'Schnelles Umschalten';
 
   @override
@@ -1361,6 +1371,19 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get map_manageRepeater => 'Repeater verwalten';
+
+  @override
+  String get map_tapToAdd =>
+      'Tippen Sie auf Knoten, um sie zum Pfad hinzuzufügen.';
+
+  @override
+  String get map_runTrace => 'Pfadverlauf ausführen';
+
+  @override
+  String get map_removeLast => 'Letztes Entfernen';
+
+  @override
+  String get map_pathTraceCancelled => 'Pfadverfolgung abgebrochen.';
 
   @override
   String get mapCache_title => 'Offline-Karten-Cache';
@@ -2703,6 +2726,9 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get pathTrace_someHopsNoLocation =>
       'Bei einer oder mehreren Knoten fehlt der Standort!';
+
+  @override
+  String get pathTrace_clearTooltip => 'Pfad löschen';
 
   @override
   String get contacts_pathTrace => 'Pfadverfolgung';

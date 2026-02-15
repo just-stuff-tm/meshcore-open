@@ -143,6 +143,16 @@ class AppLocalizationsSv extends AppLocalizations {
   String get scanner_scan => 'Skanna';
 
   @override
+  String get scanner_bluetoothOff => 'Bluetooth är avstängt';
+
+  @override
+  String get scanner_bluetoothOffMessage =>
+      'Vänligen aktivera Bluetooth för att söka efter enheter.';
+
+  @override
+  String get scanner_enableBluetooth => 'Aktivera Bluetooth';
+
+  @override
   String get device_quickSwitch => 'Snabb växling';
 
   @override
@@ -1347,6 +1357,18 @@ class AppLocalizationsSv extends AppLocalizations {
 
   @override
   String get map_manageRepeater => 'Hantera Upprepare';
+
+  @override
+  String get map_tapToAdd => 'Tryck på noder för att lägga till dem i banan.';
+
+  @override
+  String get map_runTrace => 'Kör spårsökning';
+
+  @override
+  String get map_removeLast => 'Ta bort sista';
+
+  @override
+  String get map_pathTraceCancelled => 'Sökvägsspårning avbruten.';
 
   @override
   String get mapCache_title => 'Offline Kartcache';
@@ -2672,6 +2694,9 @@ class AppLocalizationsSv extends AppLocalizations {
   @override
   String get pathTrace_someHopsNoLocation =>
       'En eller flera av humlen saknar en plats!';
+
+  @override
+  String get pathTrace_clearTooltip => 'Rensa väg';
 
   @override
   String get contacts_pathTrace => 'Path Trace';

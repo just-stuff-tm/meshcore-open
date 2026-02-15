@@ -144,6 +144,16 @@ class AppLocalizationsUk extends AppLocalizations {
   String get scanner_scan => 'Сканувати';
 
   @override
+  String get scanner_bluetoothOff => 'Bluetooth вимкнено';
+
+  @override
+  String get scanner_bluetoothOffMessage =>
+      'Будь ласка, увімкніть Bluetooth, щоб сканувати пристрої.';
+
+  @override
+  String get scanner_enableBluetooth => 'Увімкніть Bluetooth';
+
+  @override
   String get device_quickSwitch => 'Швидке перемикання';
 
   @override
@@ -1360,6 +1370,18 @@ class AppLocalizationsUk extends AppLocalizations {
 
   @override
   String get map_manageRepeater => 'Керувати ретранслятором';
+
+  @override
+  String get map_tapToAdd => 'Натисніть на вузли, щоб додати їх до шляху';
+
+  @override
+  String get map_runTrace => 'Виконати трасування шляху';
+
+  @override
+  String get map_removeLast => 'Видалити останній';
+
+  @override
+  String get map_pathTraceCancelled => 'Відмінується трасування шляху';
 
   @override
   String get mapCache_title => 'Офлайн-кеш карти';
@@ -2708,6 +2730,9 @@ class AppLocalizationsUk extends AppLocalizations {
   @override
   String get pathTrace_someHopsNoLocation =>
       'Одне або більше хмелів відсутнє місце розташування!';
+
+  @override
+  String get pathTrace_clearTooltip => 'Очистити шлях';
 
   @override
   String get contacts_pathTrace => 'Трасування шляхів';

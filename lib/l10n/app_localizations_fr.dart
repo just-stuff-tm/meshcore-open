@@ -144,6 +144,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get scanner_scan => 'Scanner';
 
   @override
+  String get scanner_bluetoothOff => 'Le Bluetooth est désactivé.';
+
+  @override
+  String get scanner_bluetoothOffMessage =>
+      'Veuillez activer le Bluetooth pour rechercher des appareils.';
+
+  @override
+  String get scanner_enableBluetooth => 'Activer le Bluetooth';
+
+  @override
   String get device_quickSwitch => 'Basculement rapide';
 
   @override
@@ -1366,6 +1376,19 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get map_manageRepeater => 'Gérer le répéteur';
+
+  @override
+  String get map_tapToAdd =>
+      'Appuyez sur les nœuds pour les ajouter au chemin.';
+
+  @override
+  String get map_runTrace => 'Exécuter la traçage de chemin';
+
+  @override
+  String get map_removeLast => 'Supprimer le dernier';
+
+  @override
+  String get map_pathTraceCancelled => 'Traçage de chemin annulé';
 
   @override
   String get mapCache_title => 'Cache de Carte Hors Ligne';
@@ -2713,6 +2736,9 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get pathTrace_someHopsNoLocation =>
       'Un ou plusieurs des sauts manquent d\'une localisation !';
+
+  @override
+  String get pathTrace_clearTooltip => 'Effacer le chemin';
 
   @override
   String get contacts_pathTrace => 'Traçage de chemin';

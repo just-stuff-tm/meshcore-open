@@ -143,6 +143,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get scanner_scan => '扫描';
 
   @override
+  String get scanner_bluetoothOff => '蓝牙已关闭';
+
+  @override
+  String get scanner_bluetoothOffMessage => '请打开蓝牙功能，以便搜索设备。';
+
+  @override
+  String get scanner_enableBluetooth => '启用蓝牙';
+
+  @override
   String get device_quickSwitch => '快速切换';
 
   @override
@@ -1300,6 +1309,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get map_manageRepeater => '管理重复器';
+
+  @override
+  String get map_tapToAdd => '点击节点将其添加到路径中';
+
+  @override
+  String get map_runTrace => '运行路径跟踪';
+
+  @override
+  String get map_removeLast => '删除最后一个';
+
+  @override
+  String get map_pathTraceCancelled => '路径跟踪已取消';
 
   @override
   String get mapCache_title => '离线地图缓存';
@@ -2556,6 +2577,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get pathTrace_someHopsNoLocation => '其中一个或多个啤酒花缺少位置！';
+
+  @override
+  String get pathTrace_clearTooltip => '清除路径';
 
   @override
   String get contacts_pathTrace => '路径追踪';

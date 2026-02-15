@@ -376,6 +376,24 @@ abstract class AppLocalizations {
   /// **'Scan'**
   String get scanner_scan;
 
+  /// No description provided for @scanner_bluetoothOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth is off'**
+  String get scanner_bluetoothOff;
+
+  /// No description provided for @scanner_bluetoothOffMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Please turn on Bluetooth to scan for devices'**
+  String get scanner_bluetoothOffMessage;
+
+  /// No description provided for @scanner_enableBluetooth.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable Bluetooth'**
+  String get scanner_enableBluetooth;
+
   /// No description provided for @device_quickSwitch.
   ///
   /// In en, this message translates to:
@@ -2517,6 +2535,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Manage Repeater'**
   String get map_manageRepeater;
+
+  /// No description provided for @map_tapToAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap on nodes to add them to the path.'**
+  String get map_tapToAdd;
+
+  /// No description provided for @map_runTrace.
+  ///
+  /// In en, this message translates to:
+  /// **'Run Path Trace'**
+  String get map_runTrace;
+
+  /// No description provided for @map_removeLast.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove Last'**
+  String get map_removeLast;
+
+  /// No description provided for @map_pathTraceCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Path trace cancelled.'**
+  String get map_pathTraceCancelled;
 
   /// No description provided for @mapCache_title.
   ///
@@ -4729,6 +4771,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'One or more of the hops is missing a location!'**
   String get pathTrace_someHopsNoLocation;
+
+  /// No description provided for @pathTrace_clearTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear path.'**
+  String get pathTrace_clearTooltip;
 
   /// No description provided for @contacts_pathTrace.
   ///

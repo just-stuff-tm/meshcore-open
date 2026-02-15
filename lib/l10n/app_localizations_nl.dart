@@ -143,6 +143,16 @@ class AppLocalizationsNl extends AppLocalizations {
   String get scanner_scan => 'Scan';
 
   @override
+  String get scanner_bluetoothOff => 'Bluetooth is uitgeschakeld';
+
+  @override
+  String get scanner_bluetoothOffMessage =>
+      'Zorg ervoor dat Bluetooth is ingeschakeld om naar apparaten te zoeken.';
+
+  @override
+  String get scanner_enableBluetooth => 'Activeer Bluetooth';
+
+  @override
   String get device_quickSwitch => 'Snelle overschakeling';
 
   @override
@@ -1354,6 +1364,19 @@ class AppLocalizationsNl extends AppLocalizations {
 
   @override
   String get map_manageRepeater => 'Beheer Repeater';
+
+  @override
+  String get map_tapToAdd =>
+      'Tik op knooppunten om ze toe te voegen aan het pad';
+
+  @override
+  String get map_runTrace => 'Padeshulp traceren';
+
+  @override
+  String get map_removeLast => 'Verwijder Laatste';
+
+  @override
+  String get map_pathTraceCancelled => 'Pad traceren geannuleerd';
 
   @override
   String get mapCache_title => 'Offline Kaarten Cache';
@@ -2688,6 +2711,9 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get pathTrace_someHopsNoLocation =>
       'Een of meer van de hops ontbreken een locatie!';
+
+  @override
+  String get pathTrace_clearTooltip => 'Weg wissen';
 
   @override
   String get contacts_pathTrace => 'Pad Traceren';

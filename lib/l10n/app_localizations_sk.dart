@@ -144,6 +144,16 @@ class AppLocalizationsSk extends AppLocalizations {
   String get scanner_scan => 'Skončiť';
 
   @override
+  String get scanner_bluetoothOff => 'Bluetooth je vypnutý';
+
+  @override
+  String get scanner_bluetoothOffMessage =>
+      'Prosím, zapnite Bluetooth, aby ste mohli skenovať pre zariadenia.';
+
+  @override
+  String get scanner_enableBluetooth => 'Povolte Bluetooth';
+
+  @override
   String get device_quickSwitch => 'Rýchle prepínač';
 
   @override
@@ -1355,6 +1365,18 @@ class AppLocalizationsSk extends AppLocalizations {
 
   @override
   String get map_manageRepeater => 'Spravovať Opakovanie';
+
+  @override
+  String get map_tapToAdd => 'Kliknite na uzly, aby ste ich pridali k ceste.';
+
+  @override
+  String get map_runTrace => 'Spustiť trasovaním cesty';
+
+  @override
+  String get map_removeLast => 'Odstrániť posledný';
+
+  @override
+  String get map_pathTraceCancelled => 'Zrušenie stopáže cesty bolo zrušené.';
 
   @override
   String get mapCache_title => 'Offline Mapa Pamäť';
@@ -2684,6 +2706,9 @@ class AppLocalizationsSk extends AppLocalizations {
   @override
   String get pathTrace_someHopsNoLocation =>
       'Jedna alebo viac chmeľov chýba lokalita!';
+
+  @override
+  String get pathTrace_clearTooltip => 'Zmazať cestu';
 
   @override
   String get contacts_pathTrace => 'Sledovanie lúčov';

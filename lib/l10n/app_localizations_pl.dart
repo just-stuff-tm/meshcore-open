@@ -144,6 +144,16 @@ class AppLocalizationsPl extends AppLocalizations {
   String get scanner_scan => 'Przeskanuj';
 
   @override
+  String get scanner_bluetoothOff => 'Bluetooth jest wyłączony';
+
+  @override
+  String get scanner_bluetoothOffMessage =>
+      'Prosimy włączyć Bluetooth, aby przeskanować urządzenia.';
+
+  @override
+  String get scanner_enableBluetooth => 'Włącz Bluetooth';
+
+  @override
   String get device_quickSwitch => 'Szybka zmiana';
 
   @override
@@ -1360,6 +1370,18 @@ class AppLocalizationsPl extends AppLocalizations {
 
   @override
   String get map_manageRepeater => 'Zarządzaj Powtórzami';
+
+  @override
+  String get map_tapToAdd => 'Kliknij na węzły, aby dodać je do ścieżki.';
+
+  @override
+  String get map_runTrace => 'Uruchom ślad ścieżki';
+
+  @override
+  String get map_removeLast => 'Usuń ostatni';
+
+  @override
+  String get map_pathTraceCancelled => 'Śledzenie ścieżki anulowano.';
 
   @override
   String get mapCache_title => 'Bufor Map Offline';
@@ -2696,6 +2718,9 @@ class AppLocalizationsPl extends AppLocalizations {
   @override
   String get pathTrace_someHopsNoLocation =>
       'Jeden lub więcej z chmieli nie ma określonej lokalizacji!';
+
+  @override
+  String get pathTrace_clearTooltip => 'Wyczyść ścieżkę';
 
   @override
   String get contacts_pathTrace => 'Śledzenie Ścieżek';

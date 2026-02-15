@@ -144,6 +144,16 @@ class AppLocalizationsSl extends AppLocalizations {
   String get scanner_scan => 'Skeniraj';
 
   @override
+  String get scanner_bluetoothOff => 'Bluetooth je izklopljen';
+
+  @override
+  String get scanner_bluetoothOffMessage =>
+      'Prosimo, vklopite Bluetooth, da lahko poiščete naprave.';
+
+  @override
+  String get scanner_enableBluetooth => 'Omogočite Bluetooth';
+
+  @override
   String get device_quickSwitch => 'Hitro preklop';
 
   @override
@@ -1351,6 +1361,18 @@ class AppLocalizationsSl extends AppLocalizations {
 
   @override
   String get map_manageRepeater => 'Upravljajte Ponovitve';
+
+  @override
+  String get map_tapToAdd => 'Pritisnite na vozlišča, da jih dodate poti.';
+
+  @override
+  String get map_runTrace => 'Zaženi sledenje poti';
+
+  @override
+  String get map_removeLast => 'Odstrani Zadnji';
+
+  @override
+  String get map_pathTraceCancelled => 'Spremljanje poti je prekinjeno.';
 
   @override
   String get mapCache_title =>
@@ -2687,6 +2709,9 @@ class AppLocalizationsSl extends AppLocalizations {
   @override
   String get pathTrace_someHopsNoLocation =>
       'Ena ali več hmelju manjka lokacija!';
+
+  @override
+  String get pathTrace_clearTooltip => 'Počisti pot';
 
   @override
   String get contacts_pathTrace => 'Sledenje poti';

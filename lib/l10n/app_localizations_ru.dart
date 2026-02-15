@@ -143,6 +143,16 @@ class AppLocalizationsRu extends AppLocalizations {
   String get scanner_scan => 'Сканирование';
 
   @override
+  String get scanner_bluetoothOff => 'Bluetooth выключен';
+
+  @override
+  String get scanner_bluetoothOffMessage =>
+      'Пожалуйста, включите Bluetooth, чтобы найти устройства.';
+
+  @override
+  String get scanner_enableBluetooth => 'Включите Bluetooth';
+
+  @override
   String get device_quickSwitch => 'Быстрое переключение';
 
   @override
@@ -1361,6 +1371,18 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get map_manageRepeater => 'Управление репитером';
+
+  @override
+  String get map_tapToAdd => 'Нажимайте на узлы, чтобы добавить их в путь.';
+
+  @override
+  String get map_runTrace => 'Запустить трассировку пути';
+
+  @override
+  String get map_removeLast => 'Удалить последний';
+
+  @override
+  String get map_pathTraceCancelled => 'Отмена трассировки пути';
 
   @override
   String get mapCache_title => 'Кэш офлайн-карты';
@@ -2701,6 +2723,9 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get pathTrace_someHopsNoLocation =>
       'Одному или нескольким хмелям не указано местоположение!';
+
+  @override
+  String get pathTrace_clearTooltip => 'Очистить путь';
 
   @override
   String get contacts_pathTrace => 'Трассировка пути';

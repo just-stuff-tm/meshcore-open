@@ -143,6 +143,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get scanner_scan => 'Scan';
 
   @override
+  String get scanner_bluetoothOff => 'Bluetooth is off';
+
+  @override
+  String get scanner_bluetoothOffMessage =>
+      'Please turn on Bluetooth to scan for devices';
+
+  @override
+  String get scanner_enableBluetooth => 'Enable Bluetooth';
+
+  @override
   String get device_quickSwitch => 'Quick switch';
 
   @override
@@ -1341,6 +1351,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get map_manageRepeater => 'Manage Repeater';
+
+  @override
+  String get map_tapToAdd => 'Tap on nodes to add them to the path.';
+
+  @override
+  String get map_runTrace => 'Run Path Trace';
+
+  @override
+  String get map_removeLast => 'Remove Last';
+
+  @override
+  String get map_pathTraceCancelled => 'Path trace cancelled.';
 
   @override
   String get mapCache_title => 'Offline Map Cache';
@@ -2658,6 +2680,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get pathTrace_someHopsNoLocation =>
       'One or more of the hops is missing a location!';
+
+  @override
+  String get pathTrace_clearTooltip => 'Clear path.';
 
   @override
   String get contacts_pathTrace => 'Path Trace';

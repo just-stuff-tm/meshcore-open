@@ -144,6 +144,16 @@ class AppLocalizationsBg extends AppLocalizations {
   String get scanner_scan => 'Сканирай';
 
   @override
+  String get scanner_bluetoothOff => 'Bluetooth е изключен.';
+
+  @override
+  String get scanner_bluetoothOffMessage =>
+      'Моля, активирайте Bluetooth, за да сканирате за устройства.';
+
+  @override
+  String get scanner_enableBluetooth => 'Активирайте Bluetooth';
+
+  @override
   String get device_quickSwitch => 'Бързо превключване';
 
   @override
@@ -1362,6 +1372,19 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get map_manageRepeater => 'Управление на Повтарящ се Елемент';
+
+  @override
+  String get map_tapToAdd =>
+      'Натиснете върху възлите, за да ги добавите към пътя.';
+
+  @override
+  String get map_runTrace => 'Изпълни Път на Следване';
+
+  @override
+  String get map_removeLast => 'Премахни Последно';
+
+  @override
+  String get map_pathTraceCancelled => 'Отменен е следването на пътя.';
 
   @override
   String get mapCache_title => 'Кеш на офлайн карти';
@@ -2698,6 +2721,9 @@ class AppLocalizationsBg extends AppLocalizations {
   @override
   String get pathTrace_someHopsNoLocation =>
       'Един или повече от хмелите липсва местоположение!';
+
+  @override
+  String get pathTrace_clearTooltip => 'Изчисти пътя';
 
   @override
   String get contacts_pathTrace => 'Пътен проследяване';
