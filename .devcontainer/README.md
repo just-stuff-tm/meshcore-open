@@ -12,13 +12,11 @@ This folder defines the development container used by Codespaces and local Dev C
 - Installs core Linux tooling plus Flutter/Linux desktop dependencies.
 - Installs Flutter `3.41.0` into `/opt/flutter`.
 - Installs Android SDK command-line tools into `/opt/android-sdk`.
-- Pre-installs Android components required by this project:
-  - `platform-tools`
-  - `platforms;android-34`
-  - `platforms;android-36`
-  - `build-tools;34.0.0`
-  - `build-tools;36.0.0`
-  - `ndk;28.2.13676358`
+Pre-installs Android components:
+- platform-tools
+- platforms;android-36
+- build-tools;36.0.0
+
 
   **Note:** Android SDK installation is required for this workspace and cannot be skipped. To speed rebuilds, the container supports persisting the SDK into a Docker volume (see `devcontainer.json` mounts).
 - Configures Flutter for Android, Linux desktop, and Web.

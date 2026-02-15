@@ -36,7 +36,10 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # Install Flutter SDK.
-RUN git clone --depth 1 --branch ${FLUTTER_VERSION} https://github.com/flutter/flutter.git ${FLUTTER_ROOT}
+RUN git clone https://github.com/flutter/flutter.git /opt/flutter \
+  && cd /opt/flutter \
+  && git checkout 3.41.0 \
+  && git remote set-url origin https://github.com/flutter/flutter.git
 
 # Install Android SDK command line tools.
 RUN mkdir -p ${ANDROID_SDK_ROOT}/cmdline-tools /tmp/android-cmdline \
