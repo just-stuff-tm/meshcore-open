@@ -2,7 +2,10 @@
   "name": "MeshCore Flutter Dev",
   "build": {
     "dockerfile": "Dockerfile",
-    "context": ".."
+    "context": "..",
+    "args": {
+      "FLUTTER_VERSION": "3.41.0"
+    }
   },
   "remoteUser": "vscode",
   "containerEnv": {
@@ -10,8 +13,12 @@
     "ANDROID_SDK_ROOT": "/opt/android-sdk",
     "CHROME_EXECUTABLE": "/usr/bin/chromium",
     "FLUTTER_ROOT": "/opt/flutter",
-    "PUB_CACHE": "/tmp/.pub-cache"
+    "PUB_CACHE": "/home/vscode/.pub-cache"
   },
+  "mounts": [
+    "source=meshcore-pub-cache,target=/home/vscode/.pub-cache,type=volume",
+    "source=meshcore-android-sdk,target=/opt/android-sdk,type=volume"
+  ],
   "customizations": {
     "vscode": {
       "extensions": [

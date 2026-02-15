@@ -24,6 +24,13 @@ else
   echo "[devcontainer] PUB_CACHE not writable; using ${PUB_CACHE} for this session."
 fi
 
+# Protect workspace 'pubspec.lock': restore committed version if flutter pub get modifies it.
+PUBSPEC_BAK="$(mktemp)"
+if [ -f pubspec.lock ]; then
+  cp pubspec.lock "${PUBSPEC_BAK}" || rm -f "${PUBSPEC_BAK}"
+fi
+trap 'if [ -f "${PUBSPEC_BAK}" ]; then if [ -f pubspec.lock ] && ! cmp -s pubspec.lock "${PUBSPEC_BAK}"; then echo "[devcontainer] Restoring tracked pubspec.lock (devcontainer policy)"; git checkout -- pubspec.lock || cp "${PUBSPEC_BAK}" pubspec.lock || true; fi; rm -f "${PUBSPEC_BAK}"; fi' EXIT
+
 LOG_FILE="$(mktemp)"
 set +e
 flutter pub get 2>&1 | tee "${LOG_FILE}"
@@ -41,3 +48,4 @@ if [ "${PUB_GET_EXIT}" -ne 0 ]; then
 fi
 
 rm -f "${LOG_FILE}"
+# Exit trap will restore pubspec.lock if flutter pub get changed it.

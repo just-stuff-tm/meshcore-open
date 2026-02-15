@@ -19,6 +19,8 @@ This folder defines the development container used by Codespaces and local Dev C
   - `build-tools;34.0.0`
   - `build-tools;36.0.0`
   - `ndk;28.2.13676358`
+
+  **Note:** Android SDK installation is required for this workspace and cannot be skipped. To speed rebuilds, the container supports persisting the SDK into a Docker volume (see `devcontainer.json` mounts).
 - Configures Flutter for Android, Linux desktop, and Web.
 - Runs `flutter precache --android` during image build.
 
@@ -33,7 +35,8 @@ This folder defines the development container used by Codespaces and local Dev C
   - Prints `flutter doctor -v` but does not fail container creation on doctor output.
 - `scripts/pub-get.sh`
   - Runs `flutter pub get`.
-  - Uses writable `PUB_CACHE` location (`/tmp/.pub-cache`).
+  - Restores tracked `pubspec.lock` if `flutter pub get` attempts to modify it (workspace policy: do not change `pubspec.lock`).
+  - Uses writable `PUB_CACHE` location (`/home/vscode/.pub-cache`).
   - Skips `pub get` if free disk is below a safety threshold.
   - Treats low-disk (`errno 28`) as non-fatal during container setup.
 - `scripts/doctor-summary.sh`
