@@ -234,8 +234,7 @@ int maxContactMessageBytes() {
 int maxChannelMessageBytes(String? senderName) {
   final nameLength = _senderNameBytes(senderName);
   final prefixBytes = nameLength + 2; // "<name>: "
-  // Reserve one byte for the C-string terminator in firmware payload handling.
-  final byPayload = maxTextPayloadBytes - prefixBytes - 1;
+  final byPayload = maxTextPayloadBytes - prefixBytes;
   final byFrame = maxFrameSize - _sendChannelTextMsgOverheadBytes;
   return _minPositive(byPayload, byFrame);
 }
