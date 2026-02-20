@@ -77,7 +77,10 @@ class MeshCoreConnector extends ChangeNotifier {
   Timer? _selfInfoRetryTimer;
   Timer? _reconnectTimer;
   Timer? _batteryPollTimer;
+  static const Duration _channelPendingTimeout = Duration(seconds: 30);
+  final Map<String, Timer> _pendingChannelMessageTimeouts = {};
   int _reconnectAttempts = 0;
+  int _bleWritePayloadMax = maxFrameSize;
 
   final StreamController<Uint8List> _receivedFramesController =
       StreamController<Uint8List>.broadcast();
@@ -314,6 +317,7 @@ class MeshCoreConnector extends ChangeNotifier {
     if (messages == null) return;
     final removed = messages.remove(message);
     if (!removed) return;
+    _clearPendingChannelMessageTimeout(message.messageId);
     await _channelMessageStore.saveChannelMessages(channelIndex, messages);
     notifyListeners();
   }
@@ -727,9 +731,20 @@ class MeshCoreConnector extends ChangeNotifier {
       // Request larger MTU for sending larger frames
       try {
         final mtu = await device.requestMtu(185);
-        debugPrint('MTU set to: $mtu');
+        final negotiatedPayloadMax = mtu - 3;
+        if (negotiatedPayloadMax > 0) {
+          _bleWritePayloadMax = negotiatedPayloadMax < maxFrameSize
+              ? negotiatedPayloadMax
+              : maxFrameSize;
+        } else {
+          _bleWritePayloadMax = maxFrameSize;
+        }
+        debugPrint('MTU set to: $mtu (BLE write max: $_bleWritePayloadMax)');
       } catch (e) {
-        debugPrint('MTU request failed: $e, using default');
+        _bleWritePayloadMax = maxFrameSize;
+        debugPrint(
+          'MTU request failed: $e, using BLE write max: $_bleWritePayloadMax',
+        );
       }
 
       List<BluetoothService> services = await device.discoverServices();
@@ -934,6 +949,7 @@ class MeshCoreConnector extends ChangeNotifier {
     _isSyncingChannels = false;
     _channelSyncInFlight = false;
     _hasLoadedChannels = false;
+    _bleWritePayloadMax = maxFrameSize;
 
     _setState(MeshCoreConnectionState.disconnected);
     if (!manual) {
@@ -944,6 +960,13 @@ class MeshCoreConnector extends ChangeNotifier {
   Future<void> sendFrame(Uint8List data) async {
     if (!isConnected || _rxCharacteristic == null) {
       throw Exception("Not connected to a MeshCore device");
+    }
+
+    if (data.length > _bleWritePayloadMax) {
+      throw Exception(
+        "Frame too large for current BLE write payload "
+        "(${data.length} > $_bleWritePayloadMax bytes)",
+      );
     }
 
     _bleDebugLogService?.logFrame(data, outgoing: true);
@@ -1325,6 +1348,7 @@ class MeshCoreConnector extends ChangeNotifier {
       channel.index,
     );
     _addChannelMessage(channel.index, message);
+    _startPendingChannelMessageTimeout(channel.index, message.messageId);
     notifyListeners();
 
     final trimmed = text.trim();
@@ -1334,7 +1358,24 @@ class MeshCoreConnector extends ChangeNotifier {
         (isChannelSmazEnabled(channel.index) && !isStructuredPayload)
         ? Smaz.encodeIfSmaller(text)
         : text;
-    await sendFrame(buildSendChannelTextMsgFrame(channel.index, outboundText));
+    final frame = buildSendChannelTextMsgFrame(channel.index, outboundText);
+    if (kDebugMode) {
+      final senderBytes = channelSenderNameUtf8Bytes(_selfName);
+      final messageBytes = channelMessageUtf8Bytes(outboundText);
+      final overAirBytes = channelOverAirPayloadBytes(_selfName, outboundText);
+      final remaining = maxTextPayloadBytes - overAirBytes;
+      debugPrint(
+        '[ChannelLenDebug] tx channel=${channel.index} '
+        'msgId=${message.messageId} '
+        'outChars=${outboundText.length} outRunes=${outboundText.runes.length} '
+        'senderBytes=$senderBytes messageBytes=$messageBytes '
+        'overAirBytes=$overAirBytes/$maxTextPayloadBytes remaining=$remaining '
+        'requiredHeadroom=$channelReliableHeadroomBytes '
+        'frameLen=${frame.length}/$maxFrameSize '
+        'smaz=${outboundText != text} structured=$isStructuredPayload',
+      );
+    }
+    await sendFrame(frame);
   }
 
   Future<void> removeContact(Contact contact) async {
@@ -3073,18 +3114,24 @@ class MeshCoreConnector extends ChangeNotifier {
         mergedPathBytes.length,
       );
       final newRepeatCount = existing.repeatCount + 1;
+      final markSentFromRepeat =
+          existing.isOutgoing &&
+          (existing.status == ChannelMessageStatus.pending ||
+              existing.status == ChannelMessageStatus.failed);
+      final mergedStatus = markSentFromRepeat
+          ? ChannelMessageStatus.sent
+          : existing.status;
       messages[existingIndex] = existing.copyWith(
         repeatCount: newRepeatCount,
         pathLength: mergedPathLength,
         pathBytes: mergedPathBytes,
         pathVariants: mergedPathVariants,
-        // Mark as sent when first repeat is heard
-        status:
-            newRepeatCount == 1 &&
-                existing.status == ChannelMessageStatus.pending
-            ? ChannelMessageStatus.sent
-            : existing.status,
+        // Mark outgoing as sent as soon as any repeat is heard.
+        status: mergedStatus,
       );
+      if (markSentFromRepeat) {
+        _clearPendingChannelMessageTimeout(existing.messageId);
+      }
     } else {
       messages.add(processedMessage);
     }
@@ -3092,6 +3139,53 @@ class MeshCoreConnector extends ChangeNotifier {
     // Save to persistent storage
     _channelMessageStore.saveChannelMessages(channelIndex, messages);
     return isNew;
+  }
+
+  void _startPendingChannelMessageTimeout(int channelIndex, String messageId) {
+    _clearPendingChannelMessageTimeout(messageId);
+    if (kDebugMode) {
+      debugPrint(
+        '[ChannelLenDebug] pending-timeout-start channel=$channelIndex '
+        'msgId=$messageId timeoutMs=${_channelPendingTimeout.inMilliseconds}',
+      );
+    }
+    _pendingChannelMessageTimeouts[messageId] = Timer(_channelPendingTimeout, (
+      ) {
+      _markPendingChannelMessageFailed(channelIndex, messageId);
+    });
+  }
+
+  void _clearPendingChannelMessageTimeout(String messageId) {
+    _pendingChannelMessageTimeouts.remove(messageId)?.cancel();
+  }
+
+  void _markPendingChannelMessageFailed(int channelIndex, String messageId) {
+    final messages = _channelMessages[channelIndex];
+    if (messages == null) return;
+    final index = messages.indexWhere((m) => m.messageId == messageId);
+    if (index < 0) return;
+
+    final existing = messages[index];
+    if (!existing.isOutgoing || existing.status != ChannelMessageStatus.pending) {
+      if (kDebugMode) {
+        debugPrint(
+          '[ChannelLenDebug] pending-timeout-skip channel=$channelIndex '
+          'msgId=$messageId status=${existing.status} outgoing=${existing.isOutgoing}',
+        );
+      }
+      return;
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        '[ChannelLenDebug] pending-timeout-failed channel=$channelIndex '
+        'msgId=$messageId repeatCount=${existing.repeatCount} '
+        'textBytes=${utf8.encode(existing.text).length}',
+      );
+    }
+    messages[index] = existing.copyWith(status: ChannelMessageStatus.failed);
+    _channelMessageStore.saveChannelMessages(channelIndex, messages);
+    notifyListeners();
   }
 
   ChannelMessage? _findMessageBySender(
@@ -3304,6 +3398,10 @@ class MeshCoreConnector extends ChangeNotifier {
     _notifySubscription?.cancel();
     _reconnectTimer?.cancel();
     _batteryPollTimer?.cancel();
+    for (final timer in _pendingChannelMessageTimeouts.values) {
+      timer.cancel();
+    }
+    _pendingChannelMessageTimeouts.clear();
     _receivedFramesController.close();
 
     // Flush pending unread writes before disposal

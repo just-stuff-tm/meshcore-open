@@ -1,6 +1,5 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_linkify/flutter_linkify.dart';
@@ -12,13 +11,16 @@ import '../helpers/chat_scroll_controller.dart';
 import '../connector/meshcore_protocol.dart';
 import '../helpers/link_handler.dart';
 import '../helpers/reaction_helper.dart';
-import '../helpers/utf8_length_limiter.dart';
+import '../helpers/smaz.dart';
 import '../l10n/l10n.dart';
 import '../models/channel.dart';
 import '../models/channel_message.dart';
+import '../utils/byte_counter.dart';
+import '../utils/byte_limit_input_formatter.dart';
 import '../utils/emoji_utils.dart';
 import '../widgets/emoji_picker.dart';
 import '../widgets/gif_message.dart';
+import '../widgets/input_length_counter.dart';
 import '../widgets/jump_to_bottom_button.dart';
 import '../widgets/gif_picker.dart';
 import 'channel_message_path_screen.dart';
@@ -768,7 +770,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
 
   Widget _buildMessageComposer() {
     final connector = context.watch<MeshCoreConnector>();
-    final maxBytes = maxChannelMessageBytes(connector.selfName);
+    final reliablePayloadMax = maxTextPayloadBytes - channelReliableHeadroomBytes;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -825,26 +827,60 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
                       );
                     }
 
-                    return TextField(
-                      controller: _textController,
-                      focusNode: _textFieldFocusNode,
-                      inputFormatters: [
-                        Utf8LengthLimitingTextInputFormatter(maxBytes),
+                    final typed = value.text.trim();
+                    final composed = _composeChannelMessageText(typed);
+                    final effective = _buildEffectiveOutgoingChannelText(
+                      connector,
+                      composed,
+                    );
+                    final overAirBytes = channelOverAirPayloadBytes(
+                      connector.selfName,
+                      effective,
+                    );
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        TextField(
+                          controller: _textController,
+                          focusNode: _textFieldFocusNode,
+                          inputFormatters: [
+                            ByteLimitInputFormatter(
+                              maxBytes: reliablePayloadMax,
+                              transformForCount: (input) {
+                                final nextTyped = input.trim();
+                                final nextComposed =
+                                    _composeChannelMessageText(nextTyped);
+                                final nextEffective =
+                                    _buildEffectiveOutgoingChannelText(
+                                      connector,
+                                      nextComposed,
+                                    );
+                                return '${connector.selfName ?? ''}: $nextEffective\u0000';
+                              },
+                            ),
+                          ],
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: InputDecoration(
+                            hintText: context.l10n.chat_typeMessage,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                          ),
+                          maxLines: null,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _sendMessage(),
+                        ),
+                        const SizedBox(height: 4),
+                        InputLengthCounter(
+                          charCount: value.text.runes.length,
+                          byteCount: overAirBytes,
+                          maxBytes: reliablePayloadMax,
+                        ),
                       ],
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: InputDecoration(
-                        hintText: context.l10n.chat_typeMessage,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                      ),
-                      maxLines: null,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _sendMessage(),
                     );
                   },
                 ),
@@ -868,13 +904,45 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
 
     final connector = context.read<MeshCoreConnector>();
 
-    String messageText = text;
-    if (_replyingToMessage != null) {
-      messageText = '@[${_replyingToMessage!.senderName}] $text';
+    final messageText = _composeChannelMessageText(text);
+    final effectiveOutgoing = _buildEffectiveOutgoingChannelText(
+      connector,
+      messageText,
+    );
+
+    final maxBytes = maxReliableChannelMessageBytes(connector.selfName);
+    final senderBytes = channelSenderNameUtf8Bytes(connector.selfName);
+    final messageBytes = ByteCounter.countBytes(effectiveOutgoing);
+    final overAirBytes = channelOverAirPayloadBytes(
+      connector.selfName,
+      effectiveOutgoing,
+    );
+    final remaining = maxTextPayloadBytes - overAirBytes;
+    final nearEdge = remaining <= 4;
+    final withinLimit = isChannelMessageWithinReliableLimit(
+      connector.selfName,
+      effectiveOutgoing,
+    );
+
+    if (kDebugMode) {
+      debugPrint(
+        '[ChannelLenDebug] compose channel=${widget.channel.index} '
+        'chars=${messageText.length} runes=${messageText.runes.length} '
+        'senderBytes=$senderBytes messageBytes=$messageBytes '
+        'overAirBytes=$overAirBytes/$maxTextPayloadBytes remaining=$remaining '
+        'maxMessageBytes=$maxBytes nearEdge=$nearEdge '
+        'requiredHeadroom=$channelReliableHeadroomBytes withinLimit=$withinLimit '
+        'smazApplied=${effectiveOutgoing != messageText}',
+      );
     }
 
-    final maxBytes = maxChannelMessageBytes(connector.selfName);
-    if (utf8.encode(messageText).length > maxBytes) {
+    if (!withinLimit) {
+      if (kDebugMode) {
+        debugPrint(
+          '[ChannelLenDebug] blocked-too-long channel=${widget.channel.index} '
+          'overAirBytes=$overAirBytes exceeds=$maxTextPayloadBytes by ${overAirBytes - maxTextPayloadBytes}',
+        );
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.l10n.chat_messageTooLong(maxBytes))),
       );
@@ -884,6 +952,25 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
     connector.sendChannelMessage(widget.channel, messageText);
     _textController.clear();
     _cancelReply();
+  }
+
+  String _composeChannelMessageText(String text) {
+    if (_replyingToMessage == null) return text;
+    return '@[${_replyingToMessage!.senderName}] $text';
+  }
+
+  String _buildEffectiveOutgoingChannelText(
+    MeshCoreConnector connector,
+    String messageText,
+  ) {
+    final trimmed = messageText.trim();
+    final isStructuredPayload =
+        trimmed.startsWith('g:') || trimmed.startsWith('m:');
+    if (connector.isChannelSmazEnabled(widget.channel.index) &&
+        !isStructuredPayload) {
+      return Smaz.encodeIfSmaller(messageText);
+    }
+    return messageText;
   }
 
   String _formatTime(DateTime time) {

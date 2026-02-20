@@ -217,7 +217,8 @@ const int pubKeySize = 32;
 const int maxPathSize = 64;
 const int pathHashSize = 1;
 const int maxNameSize = 32;
-const int maxFrameSize = 172;
+// BLE ATT payload max when negotiated MTU is 172 (172 - 3 ATT header).
+const int maxFrameSize = 169;
 const int appProtocolVersion = 3;
 // Matches firmware MAX_TEXT_LEN (10 * CIPHER_BLOCK_SIZE).
 const int maxTextPayloadBytes = 160;
@@ -225,6 +226,7 @@ const int _sendTextMsgOverheadBytes =
     1 + 1 + 1 + 4 + 6 + 1 + 2; // +2 safety margin
 const int _sendChannelTextMsgOverheadBytes =
     1 + 1 + 1 + 4 + 1 + 2; // +2 safety margin
+const int channelReliableHeadroomBytes = 5;
 
 int maxContactMessageBytes() {
   final byFrame = maxFrameSize - _sendTextMsgOverheadBytes;
@@ -234,9 +236,45 @@ int maxContactMessageBytes() {
 int maxChannelMessageBytes(String? senderName) {
   final nameLength = _senderNameBytes(senderName);
   final prefixBytes = nameLength + 2; // "<name>: "
-  final byPayload = maxTextPayloadBytes - prefixBytes;
+  final byPayload = maxTextPayloadBytes - prefixBytes - 1; // '\0'
   final byFrame = maxFrameSize - _sendChannelTextMsgOverheadBytes;
   return _minPositive(byPayload, byFrame);
+}
+
+int maxReliableChannelMessageBytes(String? senderName) {
+  final rawMax = maxChannelMessageBytes(senderName);
+  final reliableMax = rawMax - channelReliableHeadroomBytes;
+  return reliableMax > 0 ? reliableMax : 0;
+}
+
+int channelMessageUtf8Bytes(String messageText) {
+  return utf8.encode(messageText).length;
+}
+
+int channelSenderNameUtf8Bytes(String? senderName) {
+  return _senderNameBytes(senderName);
+}
+
+int channelOverAirPayloadBytes(String? senderName, String messageText) {
+  final senderBytes = channelSenderNameUtf8Bytes(senderName);
+  final messageBytes = channelMessageUtf8Bytes(messageText);
+  // "<sender>: <message>\0"
+  return senderBytes + 2 + messageBytes + 1;
+}
+
+bool isChannelMessageWithinPayloadLimit(String? senderName, String messageText) {
+  return channelOverAirPayloadBytes(senderName, messageText) <=
+      maxTextPayloadBytes;
+}
+
+bool isChannelMessageWithinReliableLimit(String? senderName, String messageText) {
+  final overAirBytes = channelOverAirPayloadBytes(senderName, messageText);
+  return overAirBytes <= (maxTextPayloadBytes - channelReliableHeadroomBytes);
+}
+
+int remainingReliableChannelBytes(String? senderName, String messageText) {
+  final reliableLimit = maxTextPayloadBytes - channelReliableHeadroomBytes;
+  return reliableLimit - channelOverAirPayloadBytes(senderName, messageText);
 }
 
 int _senderNameBytes(String? senderName) {

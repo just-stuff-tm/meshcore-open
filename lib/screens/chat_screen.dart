@@ -15,7 +15,8 @@ import '../connector/meshcore_protocol.dart';
 import '../helpers/reaction_helper.dart';
 import '../helpers/chat_scroll_controller.dart';
 import '../helpers/link_handler.dart';
-import '../helpers/utf8_length_limiter.dart';
+import '../utils/byte_counter.dart';
+import '../utils/byte_limit_input_formatter.dart';
 import '../models/channel_message.dart';
 import '../models/contact.dart';
 import '../models/message.dart';
@@ -27,6 +28,7 @@ import '../widgets/emoji_picker.dart';
 import '../widgets/gif_message.dart';
 import '../widgets/jump_to_bottom_button.dart';
 import '../widgets/gif_picker.dart';
+import '../widgets/input_length_counter.dart';
 import '../widgets/path_selection_dialog.dart';
 import '../utils/app_logger.dart';
 import '../l10n/l10n.dart';
@@ -363,23 +365,35 @@ class _ChatScreenState extends State<ChatScreen> {
                     );
                   }
 
-                  return TextField(
-                    controller: _textController,
-                    focusNode: _textFieldFocusNode,
-                    inputFormatters: [
-                      Utf8LengthLimitingTextInputFormatter(maxBytes),
-                    ],
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: context.l10n.chat_typeMessage,
-                      border: const OutlineInputBorder(),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
+                  final byteCount = ByteCounter.countBytes(value.text);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      TextField(
+                        controller: _textController,
+                        focusNode: _textFieldFocusNode,
+                        inputFormatters: [
+                          ByteLimitInputFormatter(maxBytes: maxBytes),
+                        ],
+                        textCapitalization: TextCapitalization.sentences,
+                        decoration: InputDecoration(
+                          hintText: context.l10n.chat_typeMessage,
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _sendMessage(connector),
                       ),
-                    ),
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _sendMessage(connector),
+                      const SizedBox(height: 4),
+                      InputLengthCounter(
+                        charCount: value.text.runes.length,
+                        byteCount: byteCount,
+                        maxBytes: maxBytes,
+                      ),
+                    ],
                   );
                 },
               ),
