@@ -97,6 +97,7 @@ class MeshCoreConnector extends ChangeNotifier {
   bool _manualDisconnect = false;
 
   final List<ScanResult> _scanResults = [];
+  Set<String> _scanResultIds = {};
   final List<Contact> _contacts = [];
   final List<Channel> _channels = [];
   final Map<String, List<Message>> _conversations = {};
@@ -110,6 +111,7 @@ class MeshCoreConnector extends ChangeNotifier {
   StreamSubscription<List<ScanResult>>? _scanSubscription;
   StreamSubscription<BluetoothConnectionState>? _connectionSubscription;
   StreamSubscription<List<int>>? _notifySubscription;
+  Timer? _scanNotifyThrottle;
   Timer? _selfInfoRetryTimer;
   Timer? _reconnectTimer;
   Timer? _batteryPollTimer;
@@ -667,6 +669,7 @@ class MeshCoreConnector extends ChangeNotifier {
     if (_state == MeshCoreConnectionState.scanning) return;
 
     _scanResults.clear();
+    _scanResultIds = {};
     _setState(MeshCoreConnectionState.scanning);
 
     // Ensure any previous scan is fully stopped
@@ -696,15 +699,22 @@ class MeshCoreConnector extends ChangeNotifier {
     }
 
     _scanSubscription = FlutterBluePlus.scanResults.listen((results) {
-      _scanResults.clear();
-      for (var result in results) {
+      final filtered = <ScanResult>[];
+      final ids = <String>{};
+      for (final result in results) {
         if (result.device.platformName.startsWith("MeshCore-") ||
             result.advertisementData.advName.startsWith("MeshCore-") ||
             result.advertisementData.advName.startsWith("Whisper-")) {
-          _scanResults.add(result);
+          filtered.add(result);
+          ids.add(result.device.remoteId.toString());
         }
       }
-      notifyListeners();
+      if (setEquals(ids, _scanResultIds)) return;
+      _scanResultIds = ids;
+      _scanResults
+        ..clear()
+        ..addAll(filtered);
+      _scheduleScanResultsNotify();
     });
 
     await FlutterBluePlus.startScan(
@@ -720,6 +730,9 @@ class MeshCoreConnector extends ChangeNotifier {
     await FlutterBluePlus.stopScan();
     await _scanSubscription?.cancel();
     _scanSubscription = null;
+    _scanNotifyThrottle?.cancel();
+    _scanNotifyThrottle = null;
+    _scanResultIds = {};
 
     if (_state == MeshCoreConnectionState.scanning) {
       _setState(MeshCoreConnectionState.disconnected);
@@ -765,9 +778,9 @@ class MeshCoreConnector extends ChangeNotifier {
       // Request larger MTU for sending larger frames
       try {
         final mtu = await device.requestMtu(185);
-        debugPrint('MTU set to: $mtu');
+        _debugLog('MTU set to: $mtu');
       } catch (e) {
-        debugPrint('MTU request failed: $e, using default');
+        _debugLog('MTU request failed: $e, using default');
       }
 
       List<BluetoothService> services = await device.discoverServices();
@@ -807,7 +820,7 @@ class MeshCoreConnector extends ChangeNotifier {
           await _txCharacteristic!.setNotifyValue(true);
           notifySet = true;
         } catch (e) {
-          debugPrint('setNotifyValue attempt ${attempt + 1}/3 failed: $e');
+          _debugLog('setNotifyValue attempt ${attempt + 1}/3 failed: $e');
           if (attempt == 2) rethrow;
         }
       }
@@ -833,7 +846,7 @@ class MeshCoreConnector extends ChangeNotifier {
       // Fetch channels so we can track unread counts for incoming messages
       unawaited(getChannels());
     } catch (e) {
-      debugPrint("Connection error: $e");
+      _debugLog("Connection error: $e");
       await disconnect(manual: false);
       rethrow;
     }
@@ -943,7 +956,7 @@ class MeshCoreConnector extends ChangeNotifier {
       // Skip queued BLE operations so disconnect doesn't get stuck behind them.
       await _device?.disconnect(queue: false);
     } catch (e) {
-      debugPrint("Disconnect error: $e");
+      _debugLog("Disconnect error: $e");
     }
 
     _device = null;
@@ -1210,7 +1223,7 @@ class MeshCoreConnector extends ChangeNotifier {
       appLogger.info('Path sent to device', tag: 'Connector');
     }
 
-    debugPrint(
+    _debugLog(
       'Set path override for ${contact.name}: pathLen=$pathLen, bytes=${pathBytes?.length ?? 0}',
     );
     notifyListeners();
@@ -1467,14 +1480,14 @@ class MeshCoreConnector extends ChangeNotifier {
       _handleQueueSyncTimeout();
     });
 
-    debugPrint(
+    _debugLog(
       '[QueueSync] Requesting next message (retry: $_queueSyncRetries/$_maxQueueSyncRetries)',
     );
 
     try {
       await sendFrame(buildSyncNextMessageFrame());
     } catch (e) {
-      debugPrint('[QueueSync] Error sending sync request: $e');
+      _debugLog('[QueueSync] Error sending sync request: $e');
       _queuedMessageSyncInFlight = false;
       _isSyncingQueuedMessages = false;
       _queueSyncTimeout?.cancel();
@@ -1483,7 +1496,7 @@ class MeshCoreConnector extends ChangeNotifier {
   }
 
   void _handleQueueSyncTimeout() {
-    debugPrint(
+    _debugLog(
       '[QueueSync] Timeout waiting for message (retry: $_queueSyncRetries/$_maxQueueSyncRetries)',
     );
 
@@ -1494,7 +1507,7 @@ class MeshCoreConnector extends ChangeNotifier {
       _requestNextQueuedMessage();
     } else {
       // Max retries reached, give up
-      debugPrint('[QueueSync] Max retries reached, stopping sync');
+      _debugLog('[QueueSync] Max retries reached, stopping sync');
       _queuedMessageSyncInFlight = false;
       _isSyncingQueuedMessages = false;
       _queueSyncRetries = 0;
@@ -1546,13 +1559,13 @@ class MeshCoreConnector extends ChangeNotifier {
   Future<void> getChannels({int? maxChannels, bool force = false}) async {
     if (!isConnected) return;
     if (_isSyncingChannels) {
-      debugPrint('[ChannelSync] Already syncing channels, ignoring request');
+      _debugLog('[ChannelSync] Already syncing channels, ignoring request');
       return;
     }
 
     // Skip fetching if already loaded and not forced
     if (_hasLoadedChannels && !force) {
-      debugPrint(
+      _debugLog(
         '[ChannelSync] Channels already loaded, skipping fetch (use force=true to reload)',
       );
       return;
@@ -1567,7 +1580,7 @@ class MeshCoreConnector extends ChangeNotifier {
     _channelSyncRetries = 0;
     notifyListeners();
 
-    debugPrint(
+    _debugLog(
       '[ChannelSync] Starting sync for $_totalChannelsToRequest channels',
     );
 
@@ -1601,21 +1614,21 @@ class MeshCoreConnector extends ChangeNotifier {
       () => _handleChannelSyncTimeout(channelIndex),
     );
 
-    debugPrint(
+    _debugLog(
       '[ChannelSync] Requesting channel $channelIndex/$_totalChannelsToRequest (retry: $_channelSyncRetries/$_maxChannelSyncRetries)',
     );
 
     try {
       await sendFrame(buildGetChannelFrame(channelIndex));
     } catch (e) {
-      debugPrint('[ChannelSync] Error sending channel request: $e');
+      _debugLog('[ChannelSync] Error sending channel request: $e');
       _channelSyncInFlight = false;
       _cleanupChannelSync(completed: false);
     }
   }
 
   void _handleChannelSyncTimeout(int channelIndex) {
-    debugPrint(
+    _debugLog(
       '[ChannelSync] Timeout waiting for channel $channelIndex (retry: $_channelSyncRetries/$_maxChannelSyncRetries)',
     );
 
@@ -1626,7 +1639,7 @@ class MeshCoreConnector extends ChangeNotifier {
       unawaited(_requestNextChannel());
     } else {
       // Max retries reached for this channel, restore from cache and move to next
-      debugPrint(
+      _debugLog(
         '[ChannelSync] Max retries reached for channel $channelIndex, attempting cache restore',
       );
 
@@ -1637,7 +1650,7 @@ class MeshCoreConnector extends ChangeNotifier {
         );
         if (!cachedChannel.isEmpty) {
           _channels.add(cachedChannel);
-          debugPrint(
+          _debugLog(
             '[ChannelSync] Restored channel $channelIndex (${cachedChannel.name}) from cache',
           );
         }
@@ -1656,7 +1669,7 @@ class MeshCoreConnector extends ChangeNotifier {
   void _completeChannelSync() {
     _channelSyncTimeout?.cancel();
 
-    debugPrint(
+    _debugLog(
       '[ChannelSync] Sync complete: received ${_channels.length}/$_totalChannelsToRequest channels',
     );
 
@@ -1716,18 +1729,18 @@ class MeshCoreConnector extends ChangeNotifier {
     _bleDebugLogService?.logFrame(frame, outgoing: false);
 
     final code = frame[0];
-    debugPrint('RX frame: code=$code len=${frame.length}');
+    _debugLog('RX frame: code=$code len=${frame.length}');
 
     switch (code) {
       case respCodeDeviceInfo:
         _handleDeviceInfo(frame);
         break;
       case respCodeSelfInfo:
-        debugPrint('Got SELF_INFO');
+        _debugLog('Got SELF_INFO');
         _handleSelfInfo(frame);
         break;
       case respCodeContactsStart:
-        debugPrint('Got CONTACTS_START');
+        _debugLog('Got CONTACTS_START');
         if (!_preserveContactsOnRefresh) {
           _contacts.clear();
         }
@@ -1735,16 +1748,16 @@ class MeshCoreConnector extends ChangeNotifier {
         notifyListeners();
         break;
       case pushCodeNewAdvert:
-        debugPrint('Got New CONTACT');
+        _debugLog('Got New CONTACT');
         // It's the same format as respCodeContact, so we can reuse the handler
         _handleContact(frame);
         break;
       case respCodeContact:
-        debugPrint('Got CONTACT');
+        _debugLog('Got CONTACT');
         _handleContact(frame);
         break;
       case respCodeEndOfContacts:
-        debugPrint('Got END_OF_CONTACTS');
+        _debugLog('Got END_OF_CONTACTS');
         _isLoadingContacts = false;
         _preserveContactsOnRefresh = false;
         notifyListeners();
@@ -1803,7 +1816,7 @@ class MeshCoreConnector extends ChangeNotifier {
         _handleErrorFrame(frame);
         break;
       default:
-        debugPrint('Unknown frame code: $code');
+        _debugLog('Unknown frame code: $code');
     }
   }
 
@@ -1915,7 +1928,7 @@ class MeshCoreConnector extends ChangeNotifier {
   }
 
   void _handleNoMoreMessages() {
-    debugPrint('[QueueSync] No more messages, sync complete');
+    _debugLog('[QueueSync] No more messages, sync complete');
     _queueSyncTimeout?.cancel();
     _isSyncingQueuedMessages = false;
     _queuedMessageSyncInFlight = false;
@@ -1924,7 +1937,7 @@ class MeshCoreConnector extends ChangeNotifier {
 
   void _handleQueuedMessageReceived() {
     if (!_isSyncingQueuedMessages) return;
-    debugPrint('[QueueSync] Message received, requesting next');
+    _debugLog('[QueueSync] Message received, requesting next');
     _queueSyncTimeout?.cancel(); // Cancel timeout - message arrived
     _queuedMessageSyncInFlight = false;
     _queueSyncRetries = 0; // Reset retry counter on successful message
@@ -1943,7 +1956,7 @@ class MeshCoreConnector extends ChangeNotifier {
       _currentBwHz = readUint32LE(frame, 5);
       _currentSf = frame[9];
       _currentCr = frame[10];
-      debugPrint(
+      _debugLog(
         'Radio settings: freq=$_currentFreqHz bw=$_currentBwHz sf=$_currentSf cr=$_currentCr',
       );
       notifyListeners();
@@ -2252,14 +2265,14 @@ class MeshCoreConnector extends ChangeNotifier {
           (c) => _matchesPrefix(c.publicKey, senderPrefix),
         );
         if (!hasContact) {
-          debugPrint(
+          _debugLog(
             'Received message from unknown contact, refreshing contacts...',
           );
           await refreshContactsSinceLastmod();
           // Retry parsing after refresh
           message = _parseContactMessage(frame);
           if (message != null) {
-            debugPrint('Successfully parsed message after contact refresh');
+            _debugLog('Successfully parsed message after contact refresh');
           }
         }
       }
@@ -2271,7 +2284,7 @@ class MeshCoreConnector extends ChangeNotifier {
       if (_selfPublicKey != null &&
           message.senderKeyHex == pubKeyToHex(_selfPublicKey!) &&
           (message.pathLength == null || message.pathLength == 0)) {
-        debugPrint('Ignoring direct message from self');
+        _debugLog('Ignoring direct message from self');
         return;
       }
 
@@ -2586,7 +2599,7 @@ class MeshCoreConnector extends ChangeNotifier {
         final ackHashHex = ackHash
             .map((b) => b.toRadixString(16).padLeft(2, '0'))
             .join();
-        debugPrint('Ignoring CLI command ACK (sent): $ackHashHex');
+        _debugLog('Ignoring CLI command ACK (sent): $ackHashHex');
         _lastSentWasCliCommand = false;
         return;
       }
@@ -2684,7 +2697,7 @@ class MeshCoreConnector extends ChangeNotifier {
     final channel = Channel.fromFrame(frame);
     if (channel == null) return;
 
-    debugPrint(
+    _debugLog(
       '[ChannelSync] Received channel ${channel.index}: ${channel.isEmpty ? "empty" : channel.name}',
     );
 
@@ -2717,7 +2730,7 @@ class MeshCoreConnector extends ChangeNotifier {
       } else {
         // Received a channel but not the one we're waiting for
         // This can happen if device sends unsolicited updates
-        debugPrint(
+        _debugLog(
           '[ChannelSync] Received unexpected channel ${channel.index}, expected $_nextChannelIndexToRequest',
         );
         // Add it anyway but don't advance sync
@@ -3419,11 +3432,26 @@ class MeshCoreConnector extends ChangeNotifier {
     }
   }
 
+  void _debugLog(String message) {
+    if (kDebugMode) {
+      debugPrint(message);
+    }
+  }
+
+  void _scheduleScanResultsNotify() {
+    if (_scanNotifyThrottle != null) return;
+    _scanNotifyThrottle = Timer(const Duration(milliseconds: 400), () {
+      _scanNotifyThrottle = null;
+      notifyListeners();
+    });
+  }
+
   @override
   void dispose() {
     _scanSubscription?.cancel();
     _connectionSubscription?.cancel();
     _notifySubscription?.cancel();
+    _scanNotifyThrottle?.cancel();
     _reconnectTimer?.cancel();
     _batteryPollTimer?.cancel();
     _receivedFramesController.close();
