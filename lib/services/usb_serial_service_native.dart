@@ -180,6 +180,11 @@ class UsbSerialService {
   Future<void> disconnect() async {
     if (_status == UsbSerialStatus.disconnected) return;
 
+    final portLabel = _connectedPortLabel ?? _connectedPortKey;
+    _debugLogService?.info(
+      'USB disconnect starting port=${portLabel ?? 'unknown'}',
+      tag: 'USB Serial',
+    );
     _status = UsbSerialStatus.disconnecting;
     _connectedPortKey = null;
     _connectedPortLabel = null;
@@ -208,6 +213,10 @@ class UsbSerialService {
       _serial = null;
     }
     _status = UsbSerialStatus.disconnected;
+    _debugLogService?.info(
+      'USB disconnect complete port=${portLabel ?? 'unknown'}',
+      tag: 'USB Serial',
+    );
   }
 
   void setRequestPortLabel(String label) {
