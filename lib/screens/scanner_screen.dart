@@ -270,11 +270,20 @@ class _ScannerScreenState extends State<ScannerScreen> {
     MeshCoreConnector connector,
     ScanResult result,
   ) async {
+    final name = result.device.platformName.isNotEmpty
+        ? result.device.platformName
+        : result.advertisementData.advName;
     try {
-      final name = result.device.platformName.isNotEmpty
-          ? result.device.platformName
-          : result.advertisementData.advName;
-      await connector.connect(result.device, displayName: name);
+      await connector.connect(
+        result.device,
+        displayName: name,
+        linuxPairingPinProvider: PlatformInfo.isLinux
+            ? () async {
+                if (!context.mounted) return null;
+                return _promptLinuxPairingPin(context, name);
+              }
+            : null,
+      );
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -285,6 +294,77 @@ class _ScannerScreenState extends State<ScannerScreen> {
         );
       }
     }
+  }
+
+  Future<String?> _promptLinuxPairingPin(
+    BuildContext context,
+    String deviceName,
+  ) async {
+    var pinValue = '';
+    var obscure = true;
+    final pin = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('Bluetooth Pairing PIN'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Enter PIN for $deviceName (leave blank if none).'),
+                    const SizedBox(height: 12),
+                    TextField(
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.done,
+                      obscureText: obscure,
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      onChanged: (value) {
+                        pinValue = value.trim();
+                      },
+                      onSubmitted: (value) {
+                        Navigator.of(dialogContext).pop(value.trim());
+                      },
+                      decoration: InputDecoration(
+                        suffixIcon: IconButton(
+                          onPressed: () {
+                            setDialogState(() {
+                              obscure = !obscure;
+                            });
+                          },
+                          icon: Icon(
+                            obscure ? Icons.visibility : Icons.visibility_off,
+                          ),
+                          tooltip: obscure ? 'Show PIN' : 'Hide PIN',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(null),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(pinValue),
+                  child: const Text('Connect'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (pin == null) {
+      return null;
+    }
+    return pin;
   }
 
   Widget _bluetoothOffWarning(BuildContext context) {
