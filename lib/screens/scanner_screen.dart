@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../connector/meshcore_connector.dart';
 import '../l10n/l10n.dart';
+import '../services/app_debug_log_service.dart';
 import '../utils/app_logger.dart';
 import '../widgets/adaptive_app_bar_title.dart';
 import '../widgets/device_tile.dart';
@@ -300,21 +301,31 @@ class _ScannerScreenState extends State<ScannerScreen> {
     BuildContext context,
     String deviceName,
   ) async {
+    final l10n = context.l10n;
+    final appLog = Provider.of<AppDebugLogService>(context, listen: false);
     var pinValue = '';
     var obscure = true;
+    appLog.info(
+      'Showing Linux BLE pairing PIN prompt for $deviceName',
+      tag: 'ScannerScreen',
+    );
+    appLogger.info(
+      'Showing Linux BLE pairing PIN prompt for $deviceName',
+      tag: 'ScannerScreen',
+    );
     final pin = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
             return AlertDialog(
-              title: const Text('Bluetooth Pairing PIN'),
+              title: Text(l10n.scanner_linuxPairingPinTitle),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Enter PIN for $deviceName (leave blank if none).'),
+                    Text(l10n.scanner_linuxPairingPinPrompt(deviceName)),
                     const SizedBox(height: 12),
                     TextField(
                       autofocus: true,
@@ -339,7 +350,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           icon: Icon(
                             obscure ? Icons.visibility : Icons.visibility_off,
                           ),
-                          tooltip: obscure ? 'Show PIN' : 'Hide PIN',
+                          tooltip: obscure
+                              ? l10n.scanner_linuxPairingShowPin
+                              : l10n.scanner_linuxPairingHidePin,
                         ),
                       ),
                     ),
@@ -349,11 +362,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(null),
-                  child: const Text('Cancel'),
+                  child: Text(l10n.common_cancel),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.of(dialogContext).pop(pinValue),
-                  child: const Text('Connect'),
+                  child: Text(l10n.common_connect),
                 ),
               ],
             );
@@ -362,8 +375,24 @@ class _ScannerScreenState extends State<ScannerScreen> {
       },
     );
     if (pin == null) {
+      appLog.info(
+        'Linux BLE pairing PIN prompt cancelled for $deviceName',
+        tag: 'ScannerScreen',
+      );
+      appLogger.info(
+        'Linux BLE pairing PIN prompt cancelled for $deviceName',
+        tag: 'ScannerScreen',
+      );
       return null;
     }
+    appLog.info(
+      'Linux BLE pairing PIN prompt completed for $deviceName',
+      tag: 'ScannerScreen',
+    );
+    appLogger.info(
+      'Linux BLE pairing PIN prompt completed for $deviceName',
+      tag: 'ScannerScreen',
+    );
     return pin;
   }
 
