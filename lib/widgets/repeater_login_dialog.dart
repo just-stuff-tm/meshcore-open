@@ -210,6 +210,7 @@ class _RepeaterLoginDialogState extends State<RepeaterLoginDialog> {
       if (mounted) {
         Navigator.pop(context, password);
         Future.microtask(() => widget.onLogin(password));
+        unawaited(_syncClockAfterLoginSuccess());
       }
     } catch (e) {
       final repeater = _resolveRepeater(_connector);
@@ -256,6 +257,26 @@ class _RepeaterLoginDialogState extends State<RepeaterLoginDialog> {
     timer.cancel();
     await subscription.cancel();
     return result;
+  }
+
+  Future<void> _syncClockAfterLoginSuccess() async {
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    _contactSettingsStore.setPublicKeyHex = _connector.selfPublicKeyHex;
+    final autoClockSyncEnabled = await _contactSettingsStore
+        .loadAutoClockSyncEnabled(widget.repeater.publicKeyHex);
+    if (!autoClockSyncEnabled) return;
+
+    final commandService = RepeaterCommandService(_connector);
+    try {
+      await commandService.sendCommand(widget.repeater, 'clock sync');
+    } catch (e) {
+      appLogger.warn(
+        'Auto clock sync failed for ${widget.repeater.name}: $e',
+        tag: 'RepeaterLogin',
+      );
+    } finally {
+      commandService.dispose();
+    }
   }
 
   @override

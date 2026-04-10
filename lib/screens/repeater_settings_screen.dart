@@ -1156,10 +1156,8 @@ class _RepeaterSettingsScreenState extends State<RepeaterSettingsScreen> {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Auto sync repeater clock on login'),
-              subtitle: const Text(
-                'When enabled, the companion sends "clock sync" after a successful repeater login.',
-              ),
+              title: Text(l10n.repeater_autoClockSyncOnLogin),
+              subtitle: Text(l10n.repeater_autoClockSyncOnLoginSubtitle),
               value: _autoClockSyncOnLogin,
               onChanged: (value) async {
                 setState(() {
