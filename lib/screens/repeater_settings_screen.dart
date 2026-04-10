@@ -8,6 +8,7 @@ import '../connector/meshcore_connector.dart';
 import '../connector/meshcore_protocol.dart';
 import '../services/app_debug_log_service.dart';
 import '../services/repeater_command_service.dart';
+import '../storage/contact_settings_store.dart';
 import '../widgets/path_management_dialog.dart';
 
 class RepeaterSettingsScreen extends StatefulWidget {
@@ -36,6 +37,7 @@ class _RepeaterSettingsScreenState extends State<RepeaterSettingsScreen> {
   bool _refreshingAdvertisement = false;
   StreamSubscription<Uint8List>? _frameSubscription;
   RepeaterCommandService? _commandService;
+  final ContactSettingsStore _contactSettingsStore = ContactSettingsStore();
   final Map<String, String> _fetchedSettings = {};
 
   // Basic settings
@@ -59,6 +61,7 @@ class _RepeaterSettingsScreenState extends State<RepeaterSettingsScreen> {
   bool _repeatEnabled = true;
   bool _allowReadOnly = true;
   bool _privacyMode = false;
+  bool _autoClockSyncOnLogin = false;
 
   // Advertisement settings
   bool _advertEnable = true;
@@ -87,7 +90,9 @@ class _RepeaterSettingsScreenState extends State<RepeaterSettingsScreen> {
     super.initState();
     final connector = Provider.of<MeshCoreConnector>(context, listen: false);
     _commandService = RepeaterCommandService(connector);
+    _contactSettingsStore.setPublicKeyHex = connector.selfPublicKeyHex;
     _setupMessageListener();
+    _loadLocalSettings();
     _loadSettings();
   }
 
@@ -117,6 +122,16 @@ class _RepeaterSettingsScreenState extends State<RepeaterSettingsScreen> {
           frame[0] == respCodeContactMsgRecvV3) {
         _handleTextMessageResponse(frame);
       }
+    });
+  }
+
+  Future<void> _loadLocalSettings() async {
+    final enabled = await _contactSettingsStore.loadAutoClockSyncEnabled(
+      widget.repeater.publicKeyHex,
+    );
+    if (!mounted) return;
+    setState(() {
+      _autoClockSyncOnLogin = enabled;
     });
   }
 
@@ -1138,6 +1153,21 @@ class _RepeaterSettingsScreenState extends State<RepeaterSettingsScreen> {
               },
               onRefresh: _refreshAllowReadOnly,
               refreshTooltip: l10n.repeater_refreshGuestAccess,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.repeater_autoClockSyncOnLogin),
+              subtitle: Text(l10n.repeater_autoClockSyncOnLoginSubtitle),
+              value: _autoClockSyncOnLogin,
+              onChanged: (value) async {
+                setState(() {
+                  _autoClockSyncOnLogin = value;
+                });
+                await _contactSettingsStore.saveAutoClockSyncEnabled(
+                  widget.repeater.publicKeyHex,
+                  value,
+                );
+              },
             ),
             // Privacy mode - hidden until fully implemented
             // _buildFeatureToggleRow(

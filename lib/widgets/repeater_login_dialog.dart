@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import '../l10n/l10n.dart';
 import '../models/contact.dart';
 import '../services/storage_service.dart';
+import '../services/repeater_command_service.dart';
+import '../storage/contact_settings_store.dart';
 import '../connector/meshcore_connector.dart';
 import '../connector/meshcore_protocol.dart';
 import '../utils/app_logger.dart';
@@ -29,6 +31,7 @@ class RepeaterLoginDialog extends StatefulWidget {
 class _RepeaterLoginDialogState extends State<RepeaterLoginDialog> {
   final TextEditingController _passwordController = TextEditingController();
   final StorageService _storage = StorageService();
+  final ContactSettingsStore _contactSettingsStore = ContactSettingsStore();
   bool _savePassword = false;
   bool _isLoading = true;
   bool _obscurePassword = true;
@@ -190,6 +193,7 @@ class _RepeaterLoginDialogState extends State<RepeaterLoginDialog> {
       if (mounted) {
         Navigator.pop(context, password);
         Future.microtask(() => widget.onLogin(password));
+        unawaited(_syncClockAfterLoginSuccess());
       }
     } catch (e) {
       final repeater = _resolveRepeater(_connector);
@@ -236,6 +240,26 @@ class _RepeaterLoginDialogState extends State<RepeaterLoginDialog> {
     timer.cancel();
     await subscription.cancel();
     return result;
+  }
+
+  Future<void> _syncClockAfterLoginSuccess() async {
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    _contactSettingsStore.setPublicKeyHex = _connector.selfPublicKeyHex;
+    final autoClockSyncEnabled = await _contactSettingsStore
+        .loadAutoClockSyncEnabled(widget.repeater.publicKeyHex);
+    if (!autoClockSyncEnabled) return;
+
+    final commandService = RepeaterCommandService(_connector);
+    try {
+      await commandService.sendCommand(widget.repeater, 'clock sync');
+    } catch (e) {
+      appLogger.warn(
+        'Auto clock sync failed for ${widget.repeater.name}: $e',
+        tag: 'RepeaterLogin',
+      );
+    } finally {
+      commandService.dispose();
+    }
   }
 
   @override
