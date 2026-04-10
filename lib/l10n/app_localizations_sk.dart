@@ -1227,7 +1227,7 @@ class AppLocalizationsSk extends AppLocalizations {
   String get chat_noMessages => 'Zatiaľ žiadne správy.';
 
   @override
-  String get chat_sendMessage => 'Send message';
+  String get chat_sendMessage => 'Odoslať správu';
 
   @override
   String chat_sendMessageTo(String contactName) {
@@ -2223,6 +2223,14 @@ class AppLocalizationsSk extends AppLocalizations {
   @override
   String get repeater_guestAccessSubtitle =>
       'Umožniť prístup hosta iba na čítanie.';
+
+  @override
+  String get repeater_autoClockSyncOnLogin =>
+      'Automaticky synchronizovať hodiny opakovača pri prihlásení';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      'Ak je táto možnosť povolená, sprievodca odošle „synchronizáciu času“ po úspešnom prihlásení k opakovaču.';
 
   @override
   String get repeater_privacyMode => 'Režim ochrany súkromia';

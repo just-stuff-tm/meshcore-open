@@ -1218,7 +1218,7 @@ class AppLocalizationsSv extends AppLocalizations {
   String get chat_noMessages => 'Inga meddelanden ännu';
 
   @override
-  String get chat_sendMessage => 'Send message';
+  String get chat_sendMessage => 'Skicka meddelande';
 
   @override
   String chat_sendMessageTo(String contactName) {
@@ -2209,6 +2209,14 @@ class AppLocalizationsSv extends AppLocalizations {
   @override
   String get repeater_guestAccessSubtitle =>
       'Tillåt läsbehörigheter för gäster.';
+
+  @override
+  String get repeater_autoClockSyncOnLogin =>
+      'Automatisk synkronisering av repeaterklocka vid inloggning';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      'När aktiverad skickar kompanjonen \"clock sync\" efter en lyckad repeaterinloggning.';
 
   @override
   String get repeater_privacyMode => 'Privatläge';

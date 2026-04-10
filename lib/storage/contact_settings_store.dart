@@ -20,8 +20,8 @@ class ContactSettingsStore {
       return false;
     }
     final prefs = PrefsManager.instance;
-    final key = '$keyFor$contactKeyHex';
-    final oldKey = '$_keyPrefix$contactKeyHex';
+    final key = '${_keyFor(_smazKeyPrefix)}$contactKeyHex';
+    final oldKey = '$_smazKeyPrefix$contactKeyHex';
     bool? enabled = prefs.getBool(key);
     if (enabled == null) {
       // Attempt migration from legacy unscoped key on first load
@@ -45,7 +45,34 @@ class ContactSettingsStore {
       return;
     }
     final prefs = PrefsManager.instance;
-    final key = '$keyFor$contactKeyHex';
+    final key = '${_keyFor(_smazKeyPrefix)}$contactKeyHex';
+    await prefs.setBool(key, enabled);
+  }
+
+  Future<bool> loadAutoClockSyncEnabled(String contactKeyHex) async {
+    if (publicKeyHex.isEmpty) {
+      appLogger.warn(
+        'Public key hex is not set. Cannot load contact settings.',
+      );
+      return false;
+    }
+    final prefs = PrefsManager.instance;
+    final key = '${_keyFor(_autoClockSyncKeyPrefix)}$contactKeyHex';
+    return prefs.getBool(key) ?? false;
+  }
+
+  Future<void> saveAutoClockSyncEnabled(
+    String contactKeyHex,
+    bool enabled,
+  ) async {
+    if (publicKeyHex.isEmpty) {
+      appLogger.warn(
+        'Public key hex is not set. Cannot save contact settings.',
+      );
+      return;
+    }
+    final prefs = PrefsManager.instance;
+    final key = '${_keyFor(_autoClockSyncKeyPrefix)}$contactKeyHex';
     await prefs.setBool(key, enabled);
   }
 

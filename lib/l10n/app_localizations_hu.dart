@@ -1247,7 +1247,7 @@ class AppLocalizationsHu extends AppLocalizations {
   String get chat_noMessages => 'Még nincs üzenet.';
 
   @override
-  String get chat_sendMessage => 'Send message';
+  String get chat_sendMessage => 'Üzenet küldése';
 
   @override
   String chat_sendMessageTo(String contactName) {
@@ -2251,6 +2251,14 @@ class AppLocalizationsHu extends AppLocalizations {
   @override
   String get repeater_guestAccessSubtitle =>
       'Engedje meg a vendégek számára, hogy csak olvassák a tartalmat';
+
+  @override
+  String get repeater_autoClockSyncOnLogin =>
+      'Ismétlő óra automatikus szinkronizálása bejelentkezéskor';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      'Ha engedélyezve van, a kísérő sikeres ismétlő-bejelentkezés után „időszinkron” üzenetet küld.';
 
   @override
   String get repeater_privacyMode => 'Adatvédelem mód';

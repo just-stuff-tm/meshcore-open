@@ -1175,7 +1175,7 @@ class AppLocalizationsKo extends AppLocalizations {
   String get chat_noMessages => '아직 메시지가 없습니다.';
 
   @override
-  String get chat_sendMessage => 'Send message';
+  String get chat_sendMessage => '메시지 보내기';
 
   @override
   String chat_sendMessageTo(String contactName) {
@@ -2143,6 +2143,13 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get repeater_guestAccessSubtitle => '게스트의 읽기 전용 접근 권한 허용';
+
+  @override
+  String get repeater_autoClockSyncOnLogin => '로그인 시 리피터 시계 자동 동기화';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      '활성화하면 컴패니언이 리피터 로그인 성공 후 \'시계 동기화\'를 전송합니다.';
 
   @override
   String get repeater_privacyMode => '개인 정보 보호 모드';

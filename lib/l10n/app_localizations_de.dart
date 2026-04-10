@@ -1239,7 +1239,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chat_noMessages => 'Noch keine Nachrichten.';
 
   @override
-  String get chat_sendMessage => 'Send message';
+  String get chat_sendMessage => 'Nachricht senden';
 
   @override
   String chat_sendMessageTo(String contactName) {
@@ -2238,6 +2238,14 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get repeater_guestAccessSubtitle =>
       'Gast-Zugriff mit beschränkten Rechten zulassen';
+
+  @override
+  String get repeater_autoClockSyncOnLogin =>
+      'Repeater-Uhr beim Anmelden automatisch synchronisieren';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      'Wenn aktiviert, sendet der Companion „clock sync“ nach einem erfolgreichen Repeater-Login.';
 
   @override
   String get repeater_privacyMode => 'Privatsphäreeinstellung';

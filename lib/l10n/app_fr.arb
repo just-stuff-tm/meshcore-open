@@ -2061,5 +2061,8 @@
   "scanner_linuxPairingPinPrompt": "Entrez le code PIN pour {deviceName} (laissez vide si nécessaire).",
   "scanner_linuxPairingShowPin": "Afficher le code PIN",
   "repeater_cliQuickClockSync": "Synchronisation de l'horloge",
-  "repeater_cliQuickDiscovery": "Découvrir les voisins"
+  "repeater_cliQuickDiscovery": "Découvrir les voisins",
+  "chat_sendMessage": "Envoyer un message",
+  "repeater_autoClockSyncOnLogin": "Synchronisation automatique de l'horloge du répéteur à la connexion.",
+  "repeater_autoClockSyncOnLoginSubtitle": "Lorsque cette option est activée, le compagnon envoie « clock sync » après une connexion réussie au répéteur."
 }

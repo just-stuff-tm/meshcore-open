@@ -2099,5 +2099,8 @@
   "scanner_linuxPairingPinPrompt": "Wprowadź kod PIN dla {deviceName} (pozostaw puste, jeśli brak).",
   "scanner_linuxPairingPinTitle": "Kod PIN parowania Bluetooth",
   "repeater_cliQuickClockSync": "Synchronizacja zegara",
-  "repeater_cliQuickDiscovery": "Odkryj Sąsiadów"
+  "repeater_cliQuickDiscovery": "Odkryj Sąsiadów",
+  "chat_sendMessage": "Wyślij wiadomość",
+  "repeater_autoClockSyncOnLogin": "Automatyczna synchronizacja zegara przekaźnika przy logowaniu",
+  "repeater_autoClockSyncOnLoginSubtitle": "Po włączeniu program towarzyszący wysyła „clock sync” po pomyślnym zalogowaniu repeatera."
 }

@@ -2066,5 +2066,8 @@
   "translation_translationOptions": "翻译选项",
   "translation_systemLanguage": "系统语言",
   "repeater_cliQuickDiscovery": "发现邻居",
-  "repeater_cliQuickClockSync": "同步时钟"
+  "repeater_cliQuickClockSync": "同步时钟",
+  "chat_sendMessage": "发送消息",
+  "repeater_autoClockSyncOnLogin": "登录时自动同步中继器时钟",
+  "repeater_autoClockSyncOnLoginSubtitle": "启用后，配套程序将在中继器成功登录后发送“时钟同步”。"
 }

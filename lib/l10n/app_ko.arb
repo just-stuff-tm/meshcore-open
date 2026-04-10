@@ -2099,5 +2099,8 @@
   "translation_translationOptions": "번역 옵션",
   "translation_systemLanguage": "시스템 언어",
   "repeater_cliQuickClockSync": "시계 동기화",
-  "repeater_cliQuickDiscovery": "이웃 발견하기"
+  "repeater_cliQuickDiscovery": "이웃 발견하기",
+  "chat_sendMessage": "메시지 보내기",
+  "repeater_autoClockSyncOnLogin": "로그인 시 리피터 시계 자동 동기화",
+  "repeater_autoClockSyncOnLoginSubtitle": "활성화하면 컴패니언이 리피터 로그인 성공 후 '시계 동기화'를 전송합니다."
 }

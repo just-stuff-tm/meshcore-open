@@ -2089,5 +2089,8 @@
   "translation_translationOptions": "Opciones de traducción",
   "translation_systemLanguage": "Idioma del sistema",
   "repeater_cliQuickDiscovery": "Descubrir Vecinos",
-  "repeater_cliQuickClockSync": "Sincronización del reloj"
+  "repeater_cliQuickClockSync": "Sincronización del reloj",
+  "chat_sendMessage": "Enviar mensaje",
+  "repeater_autoClockSyncOnLogin": "Sincronizar automáticamente el reloj del repetidor al iniciar sesión",
+  "repeater_autoClockSyncOnLoginSubtitle": "Cuando está habilitado, el asistente envía \"sincronización de reloj\" después de un inicio de sesión exitoso del repetidor."
 }
