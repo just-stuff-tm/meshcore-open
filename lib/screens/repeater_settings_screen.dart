@@ -35,6 +35,7 @@ class _RepeaterSettingsScreenState extends State<RepeaterSettingsScreen> {
   bool _refreshingRepeat = false;
   bool _refreshingAllowReadOnly = false;
   bool _refreshingAdvertisement = false;
+  bool _autoClockSyncTriggered = false;
   StreamSubscription<Uint8List>? _frameSubscription;
   RepeaterCommandService? _commandService;
   final ContactSettingsStore _contactSettingsStore = ContactSettingsStore();
@@ -133,6 +134,27 @@ class _RepeaterSettingsScreenState extends State<RepeaterSettingsScreen> {
     setState(() {
       _autoClockSyncOnLogin = enabled;
     });
+    if (enabled) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_autoSyncClockIfNeeded());
+      });
+    }
+  }
+
+  Future<void> _autoSyncClockIfNeeded() async {
+    if (!mounted || _autoClockSyncTriggered || !_autoClockSyncOnLogin) return;
+    final commandService = _commandService;
+    if (commandService == null) return;
+    final appLog = Provider.of<AppDebugLogService>(context, listen: false);
+    _autoClockSyncTriggered = true;
+    try {
+      await commandService.sendCommand(widget.repeater, 'clock sync');
+    } catch (e) {
+      appLog.warn(
+        'Auto clock sync failed for ${widget.repeater.name}: $e',
+        tag: 'RepeaterSettings',
+      );
+    }
   }
 
   void _handleTextMessageResponse(Uint8List frame) {
