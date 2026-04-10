@@ -2061,5 +2061,8 @@
   "scanner_linuxPairingHidePin": "Скриване на PIN кода",
   "scanner_linuxPairingShowPin": "Покажи PIN",
   "repeater_cliQuickClockSync": "Синхронизация на часовника",
-  "repeater_cliQuickDiscovery": "Открий Съседи"
+  "repeater_cliQuickDiscovery": "Открий Съседи",
+  "chat_sendMessage": "Изпрати съобщение",
+  "repeater_autoClockSyncOnLogin": "Автоматично синхронизиране на часовника на повторителя при влизане",
+  "repeater_autoClockSyncOnLoginSubtitle": "Когато е активирано, придружителят изпраща „clock sync“ след успешно вписване в репитера."
 }

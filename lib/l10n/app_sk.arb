@@ -2061,5 +2061,8 @@
   "translation_translationOptions": "Možnosti prekladania",
   "translation_systemLanguage": "Jazyk systému",
   "repeater_cliQuickClockSync": "Synchronizácia hodin",
-  "repeater_cliQuickDiscovery": "Objaviť susedov"
+  "repeater_cliQuickDiscovery": "Objaviť susedov",
+  "chat_sendMessage": "Odoslať správu",
+  "repeater_autoClockSyncOnLogin": "Automaticky synchronizovať hodiny opakovača pri prihlásení",
+  "repeater_autoClockSyncOnLoginSubtitle": "Ak je táto možnosť povolená, sprievodca odošle „synchronizáciu času“ po úspešnom prihlásení k opakovaču."
 }

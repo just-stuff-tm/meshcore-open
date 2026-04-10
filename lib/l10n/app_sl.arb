@@ -2061,5 +2061,8 @@
   "scanner_linuxPairingPinPrompt": "Vnesite PIN za {deviceName} (pustite prazno, če ga ni).",
   "scanner_linuxPairingPinTitle": "Bluetooth PIN za seznanjanje",
   "repeater_cliQuickDiscovery": "Odkrijte sosede",
-  "repeater_cliQuickClockSync": "Usklajevanje ure"
+  "repeater_cliQuickClockSync": "Usklajevanje ure",
+  "chat_sendMessage": "Pošlji sporočilo",
+  "repeater_autoClockSyncOnLogin": "Samodejno sinhroniziraj uro repetitorja ob prijavi",
+  "repeater_autoClockSyncOnLoginSubtitle": "Ko je omogočeno, spremljevalnik pošlje »clock sync« po uspešni prijavi v repetitor."
 }

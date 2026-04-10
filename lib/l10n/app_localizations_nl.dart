@@ -1228,7 +1228,7 @@ class AppLocalizationsNl extends AppLocalizations {
   String get chat_noMessages => 'Nog geen berichten.';
 
   @override
-  String get chat_sendMessage => 'Send message';
+  String get chat_sendMessage => 'Verstuur bericht';
 
   @override
   String chat_sendMessageTo(String contactName) {
@@ -2222,6 +2222,14 @@ class AppLocalizationsNl extends AppLocalizations {
   @override
   String get repeater_guestAccessSubtitle =>
       'Toegestane leesbeheer toegang voor gasten.';
+
+  @override
+  String get repeater_autoClockSyncOnLogin =>
+      'Automatisch repeaterklok synchroniseren bij inloggen.';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      'Indien ingeschakeld, verstuurt de companion \"clock sync\" na een succesvolle repeater-aanmelding.';
 
   @override
   String get repeater_privacyMode => 'Privacymodus';

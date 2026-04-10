@@ -1162,7 +1162,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chat_noMessages => '暂无消息';
 
   @override
-  String get chat_sendMessage => 'Send message';
+  String get chat_sendMessage => '发送消息';
 
   @override
   String chat_sendMessageTo(String contactName) {
@@ -2104,6 +2104,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get repeater_guestAccessSubtitle => '允许访客只读权限';
+
+  @override
+  String get repeater_autoClockSyncOnLogin => '登录时自动同步中继器时钟';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      '启用后，配套程序将在中继器成功登录后发送“时钟同步”。';
 
   @override
   String get repeater_privacyMode => '隐私模式';

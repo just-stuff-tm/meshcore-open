@@ -1239,7 +1239,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chat_noMessages => 'Сообщений пока нет';
 
   @override
-  String get chat_sendMessage => 'Send message';
+  String get chat_sendMessage => 'Отправить сообщение';
 
   @override
   String chat_sendMessageTo(String contactName) {
@@ -2241,6 +2241,14 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get repeater_guestAccessSubtitle =>
       'Разрешить гостевой доступ только для чтения';
+
+  @override
+  String get repeater_autoClockSyncOnLogin =>
+      'Автоматическая синхронизация часов репитера при входе';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      'При включении компаньон отправляет «clock sync» после успешного входа в репитер.';
 
   @override
   String get repeater_privacyMode => 'Режим конфиденциальности';

@@ -1231,7 +1231,7 @@ class AppLocalizationsUk extends AppLocalizations {
   String get chat_noMessages => 'Поки немає повідомлень.';
 
   @override
-  String get chat_sendMessage => 'Send message';
+  String get chat_sendMessage => 'Надіслати повідомлення';
 
   @override
   String chat_sendMessageTo(String contactName) {
@@ -2239,6 +2239,14 @@ class AppLocalizationsUk extends AppLocalizations {
   @override
   String get repeater_guestAccessSubtitle =>
       'Дозволити гостьовий доступ лише для читання';
+
+  @override
+  String get repeater_autoClockSyncOnLogin =>
+      'Автоматична синхронізація годинника репітера при вході';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      'Якщо ввімкнено, компаньйон надсилає «синхронізацію годинника» після успішного входу репітера.';
 
   @override
   String get repeater_privacyMode => 'Режим приватності';

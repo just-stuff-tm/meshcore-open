@@ -2198,6 +2198,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get repeater_guestAccessSubtitle => 'Allow read-only guest access';
 
   @override
+  String get repeater_autoClockSyncOnLogin =>
+      'Auto sync repeater clock on login';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      'When enabled, the companion sends \"clock sync\" after a successful repeater login.';
+
+  @override
   String get repeater_privacyMode => 'Privacy Mode';
 
   @override

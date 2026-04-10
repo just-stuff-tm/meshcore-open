@@ -1240,7 +1240,7 @@ class AppLocalizationsBg extends AppLocalizations {
   String get chat_noMessages => 'Няма съобщения.';
 
   @override
-  String get chat_sendMessage => 'Send message';
+  String get chat_sendMessage => 'Изпрати съобщение';
 
   @override
   String chat_sendMessageTo(String contactName) {
@@ -2242,6 +2242,14 @@ class AppLocalizationsBg extends AppLocalizations {
 
   @override
   String get repeater_guestAccessSubtitle => 'Разрешете самочетене за гости';
+
+  @override
+  String get repeater_autoClockSyncOnLogin =>
+      'Автоматично синхронизиране на часовника на повторителя при влизане';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      'Когато е активирано, придружителят изпраща „clock sync“ след успешно вписване в репитера.';
 
   @override
   String get repeater_privacyMode => 'Режим на поверителност';

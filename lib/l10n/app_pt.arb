@@ -2061,5 +2061,8 @@
   "scanner_linuxPairingPinPrompt": "Insira o PIN para {deviceName} (deixe em branco se não houver).",
   "scanner_linuxPairingPinTitle": "PIN de emparelhamento Bluetooth",
   "repeater_cliQuickClockSync": "Sincronização do Relógio",
-  "repeater_cliQuickDiscovery": "Descobrir Vizinhos"
+  "repeater_cliQuickDiscovery": "Descobrir Vizinhos",
+  "chat_sendMessage": "Enviar mensagem",
+  "repeater_autoClockSyncOnLogin": "Sincronizar automaticamente o relógio do repetidor ao iniciar sessão",
+  "repeater_autoClockSyncOnLoginSubtitle": "Quando ativado, o companion envia \"clock sync\" após um login de repetidor bem-sucedido."
 }
