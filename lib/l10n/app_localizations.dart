@@ -4010,6 +4010,20 @@ abstract class AppLocalizations {
   /// **'Allow read-only guest access'**
   String get repeater_guestAccessSubtitle;
 
+  /// No description provided for @repeater_autoClockSyncOnLogin.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto sync repeater clock on login'**
+  String get repeater_autoClockSyncOnLogin =>
+      'Auto sync repeater clock on login';
+
+  /// No description provided for @repeater_autoClockSyncOnLoginSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'When enabled, the companion sends "clock sync" after a successful repeater login.'**
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      'When enabled, the companion sends "clock sync" after a successful repeater login.';
+
   /// No description provided for @repeater_privacyMode.
   ///
   /// In en, this message translates to:
