@@ -190,6 +190,23 @@ class _RepeaterLoginDialogState extends State<RepeaterLoginDialog> {
         await _storage.removeRepeaterPassword(widget.repeater.publicKeyHex);
       }
 
+      _contactSettingsStore.setPublicKeyHex = _connector.selfPublicKeyHex;
+      final autoClockSyncEnabled = await _contactSettingsStore
+          .loadAutoClockSyncEnabled(widget.repeater.publicKeyHex);
+      if (autoClockSyncEnabled) {
+        final commandService = RepeaterCommandService(_connector);
+        try {
+          await commandService.sendCommand(widget.repeater, 'clock sync');
+        } catch (e) {
+          appLogger.warn(
+            'Auto clock sync failed for ${widget.repeater.name}: $e',
+            tag: 'RepeaterLogin',
+          );
+        } finally {
+          commandService.dispose();
+        }
+      }
+
       if (mounted) {
         Navigator.pop(context, password);
         Future.microtask(() => widget.onLogin(password));
