@@ -1225,7 +1225,7 @@ class AppLocalizationsSl extends AppLocalizations {
   String get chat_noMessages => 'Še ni sporočil.';
 
   @override
-  String get chat_sendMessage => 'Send message';
+  String get chat_sendMessage => 'Pošlji sporočilo';
 
   @override
   String chat_sendMessageTo(String contactName) {
@@ -2222,6 +2222,14 @@ class AppLocalizationsSl extends AppLocalizations {
   @override
   String get repeater_guestAccessSubtitle =>
       'Omogoči dostop gostom v samo bralni načinu.';
+
+  @override
+  String get repeater_autoClockSyncOnLogin =>
+      'Samodejno sinhroniziraj uro repetitorja ob prijavi';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      'Ko je omogočeno, spremljevalnik pošlje »clock sync« po uspešni prijavi v repetitor.';
 
   @override
   String get repeater_privacyMode => 'Privatni način';

@@ -2061,5 +2061,8 @@
   "scanner_linuxPairingPinTitle": "PIN per l'accoppiamento Bluetooth",
   "scanner_linuxPairingHidePin": "Nascondi il PIN",
   "repeater_cliQuickClockSync": "Sincronizzazione dell'orologio",
-  "repeater_cliQuickDiscovery": "Scopri i Vicini"
+  "repeater_cliQuickDiscovery": "Scopri i Vicini",
+  "chat_sendMessage": "Invia messaggio",
+  "repeater_autoClockSyncOnLogin": "Sincronizzazione automatica dell'orologio ripetitore all'accesso",
+  "repeater_autoClockSyncOnLoginSubtitle": "Se abilitato, il companion invia \"clock sync\" dopo un accesso riuscito al ripetitore."
 }

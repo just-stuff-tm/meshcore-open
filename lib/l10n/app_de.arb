@@ -2089,5 +2089,8 @@
   "scanner_linuxPairingPinTitle": "Bluetooth-Paarungs-PIN",
   "scanner_linuxPairingPinPrompt": "Geben Sie die PIN für {deviceName} ein (leer lassen, falls keine).",
   "repeater_cliQuickClockSync": "Uhr Synchronisieren",
-  "repeater_cliQuickDiscovery": "Entdecke Nachbarn"
+  "repeater_cliQuickDiscovery": "Entdecke Nachbarn",
+  "chat_sendMessage": "Nachricht senden",
+  "repeater_autoClockSyncOnLogin": "Repeater-Uhr beim Anmelden automatisch synchronisieren",
+  "repeater_autoClockSyncOnLoginSubtitle": "Wenn aktiviert, sendet der Companion „clock sync“ nach einem erfolgreichen Repeater-Login."
 }

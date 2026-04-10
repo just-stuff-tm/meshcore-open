@@ -1248,7 +1248,7 @@ class AppLocalizationsPl extends AppLocalizations {
   String get chat_noMessages => 'Brak jeszcze wiadomości';
 
   @override
-  String get chat_sendMessage => 'Send message';
+  String get chat_sendMessage => 'Wyślij wiadomość';
 
   @override
   String chat_sendMessageTo(String contactName) {
@@ -2251,6 +2251,14 @@ class AppLocalizationsPl extends AppLocalizations {
   @override
   String get repeater_guestAccessSubtitle =>
       'Umożliw dostęp tylko do odczytu dla gości.';
+
+  @override
+  String get repeater_autoClockSyncOnLogin =>
+      'Automatyczna synchronizacja zegara przekaźnika przy logowaniu';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      'Po włączeniu program towarzyszący wysyła „clock sync” po pomyślnym zalogowaniu repeatera.';
 
   @override
   String get repeater_privacyMode => 'Tryb prywatności';

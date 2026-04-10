@@ -1301,5 +1301,8 @@
   "scanner_linuxPairingHidePin": "Скрыть PIN",
   "scanner_linuxPairingPinTitle": "PIN‑код сопряжения Bluetooth",
   "repeater_cliQuickDiscovery": "Обнаружить Соседей",
-  "repeater_cliQuickClockSync": "Синхронизация часов"
+  "repeater_cliQuickClockSync": "Синхронизация часов",
+  "chat_sendMessage": "Отправить сообщение",
+  "repeater_autoClockSyncOnLogin": "Автоматическая синхронизация часов репитера при входе",
+  "repeater_autoClockSyncOnLoginSubtitle": "При включении компаньон отправляет «clock sync» после успешного входа в репитер."
 }

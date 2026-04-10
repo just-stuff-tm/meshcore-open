@@ -4014,15 +4014,13 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'Auto sync repeater clock on login'**
-  String get repeater_autoClockSyncOnLogin =>
-      'Auto sync repeater clock on login';
+  String get repeater_autoClockSyncOnLogin;
 
   /// No description provided for @repeater_autoClockSyncOnLoginSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'When enabled, the companion sends "clock sync" after a successful repeater login.'**
-  String get repeater_autoClockSyncOnLoginSubtitle =>
-      'When enabled, the companion sends "clock sync" after a successful repeater login.';
+  /// **'When enabled, the companion sends \"clock sync\" after a successful repeater login.'**
+  String get repeater_autoClockSyncOnLoginSubtitle;
 
   /// No description provided for @repeater_privacyMode.
   ///

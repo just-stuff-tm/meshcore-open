@@ -1240,7 +1240,7 @@ class AppLocalizationsIt extends AppLocalizations {
   String get chat_noMessages => 'Nessun messaggio ancora';
 
   @override
-  String get chat_sendMessage => 'Send message';
+  String get chat_sendMessage => 'Invia messaggio';
 
   @override
   String chat_sendMessageTo(String contactName) {
@@ -2239,6 +2239,14 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get repeater_guestAccessSubtitle =>
       'Consenti l\'accesso ospite in sola lettura';
+
+  @override
+  String get repeater_autoClockSyncOnLogin =>
+      'Sincronizzazione automatica dell\'orologio ripetitore all\'accesso';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      'Se abilitato, il companion invia \"clock sync\" dopo un accesso riuscito al ripetitore.';
 
   @override
   String get repeater_privacyMode => 'Modalità Privacy';

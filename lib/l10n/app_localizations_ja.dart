@@ -1180,7 +1180,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get chat_noMessages => 'まだメッセージは届いていません';
 
   @override
-  String get chat_sendMessage => 'Send message';
+  String get chat_sendMessage => 'メッセージを送信';
 
   @override
   String chat_sendMessageTo(String contactName) {
@@ -2146,6 +2146,13 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get repeater_guestAccessSubtitle => 'ゲストへの読み取り専用アクセスを許可する';
+
+  @override
+  String get repeater_autoClockSyncOnLogin => 'ログイン時に中継時計を自動同期';
+
+  @override
+  String get repeater_autoClockSyncOnLoginSubtitle =>
+      '有効な場合、リピーターへのログイン成功後、コンパニオンは \"clock sync\" を送信します。';
 
   @override
   String get repeater_privacyMode => 'プライバシーモード';
