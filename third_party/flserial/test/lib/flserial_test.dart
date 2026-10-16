@@ -1,5 +1,6 @@
 import 'dart:ffi';
 import 'dart:io';
+
 import 'package:flserial/flserial_bindings_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -15,7 +16,9 @@ void main() {
       return DynamicLibrary.open('lib$libName.so');
     }
     if (Platform.isWindows) {
-      return DynamicLibrary.open('./build/windows/x64/runner/Release/$libName.dll');
+      return DynamicLibrary.open(
+        './build/windows/x64/runner/Release/$libName.dll',
+      );
     }
     throw UnsupportedError('Unknown platform: ${Platform.operatingSystem}');
   }();
@@ -25,8 +28,8 @@ void main() {
   //'/home/runner/work/flserial/flserial/build/linux/x64/release/shared/libflserial.so');
 
   test('FLSerial status should be closed', () {
-      bindings.fl_init(10);
+    bindings.fl_init(10);
 
-      bindings.fl_free();
+    bindings.fl_free();
   });
 }
